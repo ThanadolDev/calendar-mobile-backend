@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SQL Query Logger</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        padding: 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+        background-color: #f4f7f9;
+      }
+      h1 {
+        color: #2c3e50;
+      }
+      #controls {
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+      }
+      button {
+        padding: 8px 12px;
+        margin-right: 10px;
+        cursor: pointer;
+        background-color: #3498db;
+        color: white;
+        border: none;
+        border-radius: 4px;
+      }
+      button:hover {
+        background-color: #2980b9;
+      }
+      #clearBtn {
+        background-color: #e74c3c;
+      }
+      #clearBtn:hover {
+        background-color: #c0392b;
+      }
+      #status {
+        margin-left: 10px;
+        color: #7f8c8d;
+      }
+      #counter {
+        margin-left: auto;
+        color: #7f8c8d;
+        font-weight: bold;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background-color: white;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 12px;
+        border-bottom: 1px solid #ddd;
+      }
+      th {
+        background-color: #34495e;
+        color: white;
+        position: sticky;
+        top: 0;
+      }
+      tr:hover {
+        background-color: #f5f5f5;
+      }
+      .success {
+        color: #27ae60;
+      }
+      .error {
+        color: #e74c3c;
+      }
+      .scrollable {
+        max-height: calc(100vh - 150px);
+        overflow-y: auto;
+        border-radius: 4px;
+      }
+      pre {
+        white-space: pre-wrap;
+        word-wrap: break-word;
+        max-width: 400px;
+        overflow: auto;
+        margin: 0;
+        padding: 8px;
+        background-color: #f7f9fb;
+        border-radius: 3px;
+        border: 1px solid #dfe6e9;
+      }
+      .time-col {
+        width: 100px;
+      }
+      .status-col {
+        width: 120px;
+      }
+      .rows-col {
+        width: 60px;
+        text-align: center;
+      }
+      #searchInput {
+        padding: 8px;
+        border: 1px solid #bdc3c7;
+        border-radius: 4px;
+        width: 200px;
+        margin-right: 10px;
+      }
+      .highlight {
+        background-color: #fff9c4 !important;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>SQL Query Logger</h1>
+
+    <div id="controls">
+      <input type="text" id="searchInput" placeholder="Search queries..." />
+      <button id="refreshBtn">Refresh</button>
+      <button id="clearBtn">Clear All Logs</button>
+      <span id="status"></span>
+      <span id="counter">0 logs</span>
+    </div>
+
+    <div class="scrollable">
+      <table id="logTable">
+        <thead>
+          <tr>
+            <th class="time-col">Time</th>
+            <th>SQL Query</th>
+            <th>Parameters</th>
+            <th class="status-col">Status</th>
+            <th class="rows-col">Rows</th>
+          </tr>
+        </thead>
+        <tbody id="logBody"></tbody>
+      </table>
+    </div>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", function () {
+        const refreshBtn = document.getElementById("refreshBtn");
+        const clearBtn = document.getElementById("clearBtn");
+        const searchInput = document.getElementById("searchInput");
+        const status = document.getElementById("status");
+        const counter = document.getElementById("counter");
+        const logBody = document.getElementById("logBody");
+
+        let logs = [];
+
+        function renderLogs() {
+          const searchTerm = searchInput.value.toLowerCase();
+
+          logBody.innerHTML = "";
+          let displayedLogs = logs;
+
+          if (searchTerm) {
+            displayedLogs = logs.filter(
+              (log) =>
+                log.sql.toLowerCase().includes(searchTerm) ||
+                JSON.stringify(log.bindParams || {})
+                  .toLowerCase()
+                  .includes(searchTerm)
+            );
+            status.textContent = `Showing ${displayedLogs.length} of ${logs.length} logs matching '${searchTerm}'`;
+          } else {
+            status.textContent = "";
+          }
+
+          displayedLogs.forEach((log) => {
+            const row = document.createElement("tr");
+
+            const timeCell = document.createElement("td");
+            timeCell.textContent = new Date(log.timestamp).toLocaleTimeString();
+            timeCell.className = "time-col";
+            row.appendChild(timeCell);
+
+            const sqlCell = document.createElement("td");
+            const sqlPre = document.createElement("pre");
+            sqlPre.textContent = log.sql;
+            sqlCell.appendChild(sqlPre);
+            row.appendChild(sqlCell);
+
+            const paramsCell = document.createElement("td");
+            const paramsPre = document.createElement("pre");
+            paramsPre.textContent = JSON.stringify(
+              log.bindParams || {},
+              null,
+              2
+            );
+            paramsCell.appendChild(paramsPre);
+            row.appendChild(paramsCell);
+
+            const statusCell = document.createElement("td");
+            statusCell.className = log.success
+              ? "success status-col"
+              : "error status-col";
+            statusCell.textContent = log.success
+              ? "Success"
+              : "Error: " + log.error;
+            row.appendChild(statusCell);
+
+            const rowsCell = document.createElement("td");
+            rowsCell.className = "rows-col";
+            rowsCell.textContent = log.rows || 0;
+            row.appendChild(rowsCell);
+
+            if (
+              searchTerm &&
+              (log.sql.toLowerCase().includes(searchTerm) ||
+                JSON.stringify(log.bindParams || {})
+                  .toLowerCase()
+                  .includes(searchTerm))
+            ) {
+              row.classList.add("highlight");
+            }
+
+            logBody.appendChild(row);
+          });
+
+          counter.textContent = `${logs.length} logs total`;
+        }
+
+        function loadLogs() {
+          fetch("/api/sql-logs")
+            .then((response) => response.json())
+            .then((data) => {
+              logs = data;
+              renderLogs();
+            })
+            .catch((err) => {
+              status.textContent = "Error loading logs: " + err.message;
+              counter.textContent = "0 logs loaded";
+            });
+        }
+
+        // Event listeners
+        refreshBtn.addEventListener("click", loadLogs);
+
+        searchInput.addEventListener("input", () => {
+          renderLogs();
+        });
+
+        clearBtn.addEventListener("click", function () {
+          if (confirm("Are you sure you want to clear all logs?")) {
+            fetch("/api/sql-logs/clear", {
+              method: "POST",
+            })
+              .then((response) => response.json())
+              .then((data) => {
+                if (data.success) {
+                  logs = [];
+                  renderLogs();
+                  status.textContent = "Logs cleared successfully";
+                  counter.textContent = "0 logs total";
+                }
+              })
+              .catch((err) => {
+                status.textContent = "Error clearing logs: " + err.message;
+              });
+          }
+        });
+
+        // Initial load
+        loadLogs();
+
+        // Auto-refresh every 10 seconds
+        setInterval(loadLogs, 10000);
+      });
+    </script>
+  </body>
+</html>
