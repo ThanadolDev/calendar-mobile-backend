@@ -5,18 +5,15 @@ const multer = require('multer');
 
 const router = express.Router();
 
-// Configure multer for in-memory storage
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: 5 * 1024 * 1024, 
   }
 });
 
-// Protect all routes
 // router.use(protect);
 
-// Routes
 router.route('/')
   .get(diecutController.getAllDiecuts)
   .post(upload.single('image'), diecutController.createDiecut);
@@ -30,7 +27,14 @@ router.post('/:id/serial', diecutController.generateSerialNumber);
 
 router.get('/status', diecutController.getDiecutStatusReport);
 
-// Get diecut status summary
 router.get('/status/summary', diecutController.getDiecutStatusSummary);
+
+router.post('/savediecut', diecutController.saveDiecutSN);
+
+router.post('/getdiecutsn', diecutController.getDiecutSN);
+
+router.post('/savediecutmodidetail', diecutController.saveDiecutModiSN);
+
+router.get('/types', diecutController.getDiecuttypes);
 
 module.exports = router;

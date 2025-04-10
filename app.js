@@ -4,23 +4,18 @@ const morgan = require('morgan');
 const { errorHandler } = require('./middleware/error');
 const routes = require('./routes');
 
-// Initialize express app
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Logger
 if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-// API Routes
 app.use('/api', routes);
 
-// Health Check Route
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'success',
@@ -29,10 +24,8 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Error handling middleware
 app.use(errorHandler);
 
-// Handle 404 routes
 app.use('*', (req, res) => {
   res.status(404).json({
     status: 'error',

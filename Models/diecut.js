@@ -267,6 +267,143 @@ class DiecutSN {
       throw error;
     }
   }
+
+
+  static async saveBlade(bladeData) {
+    try {
+      const {
+        diecutSN,
+        diecutAge,
+        startTime,
+        endTime,
+        bladeType,
+        multiBladeReason,
+        multiBladeRemark,
+        probDesc,
+        remark
+      } = bladeData;
+
+      const formattedStartTime = startTime ? startTime.split('T')[0] : null;
+      const formattedEndTime = endTime ? endTime.split('T')[0] : null;
+      logger.info(`Saving blade modification for: ${diecutSN}`);
+
+      const updateSNQuery = `
+        UPDATE KPDBA.DIECUT_SN
+        SET DIECUT_AGE = :diecut_age
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+
+      await executeQuery(updateSNQuery, {
+        diecut_age: diecutAge,
+        diecut_sn: diecutSN
+      });
+
+      const checkExistingQuery = `
+        SELECT COUNT(*) AS count
+        FROM KPDBA.DIECUT_MODIFY
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+
+      const checkResult = await executeQuery(checkExistingQuery, {
+        diecut_sn: diecutSN
+      });
+
+      const recordExists = checkResult.rows[0].COUNT > 0;
+
+      let modifyQuery;
+      if (recordExists) {
+        modifyQuery = `
+          UPDATE KPDBA.DIECUT_MODIFY
+          SET 
+            START_TIME = TO_DATE(:start_time, 'YYYY-MM-DD'),
+            END_TIME = TO_DATE(:end_time, 'YYYY-MM-DD'),
+            BLADE_TYPE = :blade_type,
+            MULTI_BLADE_REASON = :multi_blade_reason,
+            MULTI_BLADE_REMARK = :multi_blade_remark,
+            PROB_DESC = :prob_desc,
+            REMARK = :remark
+          WHERE DIECUT_SN = :diecut_sn
+        `;
+      } else {
+        modifyQuery = `
+          INSERT INTO KPDBA.DIECUT_MODIFY (
+  DIECUT_SN, 
+  START_TIME, 
+  END_TIME, 
+  BLADE_TYPE, 
+  MULTI_BLADE_REASON, 
+  MULTI_BLADE_REMARK, 
+  PROB_DESC, 
+  REMARK
+) VALUES (
+  :diecut_sn,
+  TO_DATE(:start_time, 'YYYY-MM-DD'),
+  TO_DATE(:end_time, 'YYYY-MM-DD'),
+  :blade_type,
+  :multi_blade_reason,
+  :multi_blade_remark,
+  :prob_desc,
+  :remark
+)
+        `;
+      }
+      console.log(modifyQuery)
+      console.log({
+        diecut_sn: diecutSN,
+        start_time: formattedStartTime,
+        end_time: formattedEndTime,
+        blade_type: bladeType,
+        multi_blade_reason: multiBladeReason,
+        multi_blade_remark: multiBladeRemark,
+        prob_desc: probDesc,
+        remark: remark
+      })
+      const modifyResult = await executeQuery(modifyQuery, {
+        diecut_sn: diecutSN,
+        start_time: formattedStartTime || '1900-01-02',
+        end_time: formattedEndTime,
+        blade_type: bladeType,
+        multi_blade_reason: multiBladeReason,
+        multi_blade_remark: multiBladeRemark,
+        prob_desc: probDesc,
+        remark: remark
+      });
+
+      const getUpdatedDataQuery = `
+        SELECT 
+          DS.DIECUT_ID,
+          DS.DIECUT_SN,
+          DS.DIECUT_AGE,
+          DS.STATUS,
+          DM.START_TIME,
+          DM.END_TIME,
+          DM.BLADE_TYPE,
+          DM.MULTI_BLADE_REASON,
+          DM.MULTI_BLADE_REMARK,
+          DM.PROB_DESC,
+          DM.REMARK
+        FROM 
+          KPDBA.DIECUT_SN DS
+        LEFT JOIN 
+          KPDBA.DIECUT_MODIFY DM ON DS.DIECUT_SN = DM.DIECUT_SN
+        WHERE 
+          DS.DIECUT_SN = :diecut_sn
+      `;
+
+      const updatedData = await executeQuery(getUpdatedDataQuery, {
+        diecut_sn: diecutSN
+      });
+
+      return {
+        success: true,
+        message: recordExists ? 'Blade data updated' : 'Blade data created',
+        data: updatedData.rows[0]
+      };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveBlade:', error);
+      throw error;
+    }
+  }
 }
 
 class DiecutStatus {
@@ -275,9 +412,101 @@ class DiecutStatus {
    * @param {Object} filters - Optional filters for the report
    * @returns {Promise<Array>} - Array of diecut status objects
    */
+
+  static async saveDiecutSNList(diecutId, snList) {
+    try {
+      logger.info(`Saving ${snList.length} SN entries for diecut ID: ${diecutId}`);
+      console.log(diecutId, snList);
+      
+      let savedCount = 0;
+      let modifyCount = 0;
+      let skippedCount = 0;
+      const currentDate = new Date();
+      const formattedDate = currentDate.toISOString().split('T')[0];
+      
+      // Query to check if a diecut_sn already exists
+      const checkSNQuery = `
+        SELECT COUNT(*) AS COUNT
+        FROM KPDBA.DIECUT_SN
+        WHERE DIECUT_SN = :DIECUT_SN
+      `;
+      
+      const insertSNQuery = `
+        INSERT INTO KPDBA.DIECUT_SN
+        (DIECUT_SN, DIECUT_ID, DIECUT_AGE)
+        VALUES (:DIECUT_SN, :DIECUT_ID, 0)
+      `;
+      
+      const insertModifyQuery = `
+        INSERT INTO KPDBA.DIECUT_MODIFY
+        (DIECUT_SN, MODIFY_TYPE)
+        VALUES (:DIECUT_SN, :MODIFY_TYPE)
+      `;
+      
+      for (const sn of snList) {
+        if (!sn.DIECUT_SN) {
+          logger.warn('Skipping entry with missing DIECUT_SN');
+          continue;
+        }
+        
+        // Check if diecut_sn already exists
+        const checkResult = await executeQuery(checkSNQuery, 
+          { DIECUT_SN: sn.DIECUT_SN }
+        );
+        
+        // If the serial number already exists, skip it
+        if (checkResult.rows && checkResult.rows[0] && checkResult.rows[0].COUNT > 0) {
+          logger.warn(`Skipping duplicate DIECUT_SN: ${sn.DIECUT_SN}`);
+          skippedCount++;
+          continue;
+        }
+        
+        // Insert the new serial number
+        const result = await executeQuery(insertSNQuery,
+          {
+            DIECUT_SN: sn.DIECUT_SN,
+            DIECUT_ID: diecutId
+          },
+          { autoCommit: false });
+        
+        savedCount++;
+        
+        // if (sn.DIECUT_TYPE) {
+        //   const result = await executeQuery(insertModifyQuery,
+        //     {
+        //       DIECUT_SN: sn.DIECUT_SN,
+        //       MODIFY_TYPE: sn.DIECUT_TYPE
+        //     },
+        //     { autoCommit: false });
+        //   modifyCount++;
+        // }
+      }
+  
+      // await executeQuery(
+      //   `UPDATE KPDBA.DIECUT_STATUS
+      //    SET LAST_MODIFY = :LAST_MODIFY
+      //    WHERE DIECUT_ID = :DIECUT_ID`,
+      //   {
+      //     LAST_MODIFY: formattedDate,
+      //     DIECUT_ID: diecutId
+      //   },
+      //   { autoCommit: false }
+      // );
+      
+      return {
+        savedCount,
+        modifyCount,
+        skippedCount
+      };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveDiecutSNList:', error);
+      throw error;
+    }
+  }
+
   static async getStatusReport(filters = {}) {
     try {
-      // SQL query for diecut status report
+      console.log(filters)
       const sql = `
         SELECT DSN.DIECUT_ID, DSN.DIECUT_SN, DSN.AGES, DSN.USED, DSN.REMAIN, DSN.DIECUT_NEAR_EXP
         , CASE WHEN DSN.REMAIN <= 0 THEN '1' WHEN DSN.REMAIN <= DSN.DIECUT_NEAR_EXP THEN '2' ELSE '3' END PRIORITY
@@ -328,36 +557,37 @@ class DiecutStatus {
         LEFT JOIN KPDBA.DIECUT_MODIFY DM ON (DSN.DIECUT_SN = DM.DIECUT_SN AND DM.END_TIME IS NULL AND DM.CANCEL_FLAG = 'F')
       `;
 
-      // Apply filters if provided
       let whereClause = '';
       const binds = {};
       
+      // Add conditions to the inner query instead
       if (filters.diecutId) {
-        whereClause += ' AND DSN.DIECUT_ID = :diecutId';
+        whereClause += ' AND SN.DIECUT_ID = :diecutId';
         binds.diecutId = filters.diecutId;
       }
       
       if (filters.diecutType) {
-        whereClause += ' AND DSN.DIECUT_TYPE = :diecutType';
+        whereClause += ' AND SN.DIECUT_TYPE = :diecutType';
         binds.diecutType = filters.diecutType;
       }
       
+      // Modify the main SQL query to include these conditions
+      let finalSql = sql;
+      
+      if (whereClause) {
+        // Insert the conditions into the innermost WHERE clause
+        finalSql = sql.replace('WHERE NVL(SN.STATUS,\'F\') <> \'F\' AND SN.TL_STATUS = \'GOOD\'', 
+                              `WHERE NVL(SN.STATUS,'F') <> 'F' AND SN.TL_STATUS = 'GOOD'${whereClause}`);
+      }
+      
+      // Handle the priority filter separately since it uses the computed PRIORITY column
       if (filters.priority) {
-        whereClause += ' AND CASE WHEN DSN.REMAIN <= 0 THEN \'1\' WHEN DSN.REMAIN <= DSN.DIECUT_NEAR_EXP THEN \'2\' ELSE \'3\' END = :priority';
+        finalSql = `SELECT * FROM (${finalSql}) WHERE PRIORITY = :priority`;
         binds.priority = filters.priority;
       }
       
-      // Add where clause to the query if filters were applied
-      let finalSql = sql;
-      if (whereClause) {
-        // Add a WHERE clause after the main query
-        finalSql = `SELECT * FROM (${sql}) WHERE 1=1 ${whereClause}`;
-      }
-      
-      // Add order by clause
-      finalSql += ' ORDER BY PRIORITY ASC, REMAIN ASC';
-      
-      // Execute the query
+      // finalSql += ' ORDER BY PRIORITY ASC, REMAIN ASC';
+      console.log(finalSql)
       const result = await executeQuery(finalSql, binds);
       
       return result.rows;
@@ -463,7 +693,87 @@ class DiecutStatus {
       throw error;
     }
   }
+
+   /**
+   * Save diecut serial numbers and related modification info
+   * @param {string} diecutId - The parent diecut ID
+   * @param {Array} snList - Array of serial numbers and their types
+   * @returns {Promise<Object>} - Results of the save operation
+   */
+   static async getDiecutSNList(diecutId) {
+    try {
+      logger.info(` SN entries for diecut ID: ${diecutId}`);
+      console.log(diecutId);
+      
+      
+      const checkSNQuery = `
+                
+        SELECT 
+    DS.DIECUT_ID,
+    DS.DIECUT_SN,
+    DS.DIECUT_AGE,
+    DS.STATUS,
+    DM.START_TIME,
+    DM.END_TIME,
+    DM.BLADE_TYPE,
+    DM.MULTI_BLADE_REASON,
+    DM.MULTI_BLADE_REMARK,
+    DM.PROB_DESC,
+    DM.REMARK
+FROM 
+    KPDBA.DIECUT_SN DS
+LEFT JOIN 
+    KPDBA.DIECUT_MODIFY DM ON DS.DIECUT_SN = DM.DIECUT_SN
+WHERE 
+    DS.DIECUT_ID = :s_diecut_id
+ORDER BY 
+    DS.DIECUT_SN ASC
+
+      `;
+      
+      
+      const checkResult = await executeQuery(checkSNQuery, 
+        { s_diecut_id: diecutId }
+      );
+      console.log(checkResult.rows)
+  
+
+      return {
+        checkResult
+      };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveDiecutSNList:', error);
+      throw error;
+    }
+  }
+
+  static async getDiecutTypeList() {
+    try {
+      
+      
+      const checkSNQuery = `
+                
+       SELECT DISTINCT DIECUT_TYPE FROM KPDBA.DIECUT_SN
+
+      `;
+      
+      
+      const checkResult = await executeQuery(checkSNQuery
+      );
+      console.log(checkResult.rows)
+  
+
+      return {
+        checkResult
+      };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveDiecutSNList:', error);
+      throw error;
+    }
+  }
 }
+
+
 
 module.exports = {
   Diecut,

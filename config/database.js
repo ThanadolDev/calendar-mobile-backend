@@ -71,6 +71,7 @@ async function executeQuery(sql, binds = {}, options = {}, dblocate) {
     };
     
     const result = await connection.execute(sql, binds, { ...defaultOptions, ...options });
+    connection.commit();
     return result;
   } catch (error) {
     logger.error('Error executing query:', error);

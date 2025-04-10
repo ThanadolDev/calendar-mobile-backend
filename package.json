@@ -20,6 +20,6 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "set NODE_ENV=dev&& nodemon Index.js",
-    "prod": "set NODE_ENV=prod&& nodemon Index.js"
+    "prod": "set NODE_ENV=prod&& node Index.js"
   }
 }
