@@ -3,7 +3,7 @@ const { User } = require('../Models');
 const { ApiError } = require('./error');
 const { asyncHandler } = require('../utils/helpers');
 const config = require('../config/config');
-
+const axios = require('axios')
 /**
  * Protect routes - verify JWT token
  */
@@ -24,19 +24,46 @@ exports.protect = asyncHandler(async (req, res, next) => {
   }
 
   try {
-   
-
-    
-    if (!user) {
+    // console.log(token)
+    // Use the external verification service instead of local JWT verification
+    const verificationResponse = await axios.post(
+      'https://api.nitisakc.dev/auth/verify', 
+      {}, // Empty body - NOT putting the token here
+      {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    // console.log(verificationResponse)
+    // Check if verification was successful
+    if (verificationResponse.data && verificationResponse.data.profile) {
+      // Add user information to request
+      req.user = verificationResponse.data.profile[0];
+      
+      // Optionally add the full verification response data
+      req.authData = verificationResponse.data;
+      // console.log(verificationResponse.data)
+      next();
+    } else {
       return next(
-        new ApiError('The user belonging to this token no longer exists', 401)
+        new ApiError('Token verification failed. Please log in again', 401)
       );
     }
-
-    req.user = user;
-    next();
   } catch (error) {
-    return next(new ApiError('Invalid token. Please log in again', 401));
+    // Handle different error scenarios
+    // console.log(error.response)
+    if (error.response) {
+      // The verification service responded with an error status
+      const statusCode = error.response.status || 401;
+      const message = error.response.data?.message || 'Token verification failed. Please log in again';
+      return next(new ApiError(message, statusCode));
+    } else if (error.request) {
+      // The request was made but no response was received
+      return next(new ApiError('Verification service not available. Please try again later', 503));
+    } else {
+      // Something else went wrong
+      return next(new ApiError('Invalid token. Please log in again', 401));
+    }
   }
 });
 

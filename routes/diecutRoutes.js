@@ -12,7 +12,7 @@ const upload = multer({
   }
 });
 
-// router.use(protect);
+router.use(protect);
 
 router.route('/')
   .get(diecutController.getAllDiecuts)
@@ -34,6 +34,14 @@ router.post('/savediecut', diecutController.saveDiecutSN);
 router.post('/getdiecutsn', diecutController.getDiecutSN);
 
 router.post('/savediecutmodidetail', diecutController.saveDiecutModiSN);
+
+router.post('/changetyperequest', diecutController.saveTypeRequest);
+
+router.post('/verifyapprover', diecutController.verifyApprover);
+
+router.post('/approvetypechange', diecutController.approveTypeChange);
+
+router.post('/canceltypechange', diecutController.cancelTypeChange);
 
 router.get('/types', diecutController.getDiecuttypes);
 

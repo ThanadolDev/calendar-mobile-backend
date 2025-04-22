@@ -199,7 +199,9 @@ exports.generateSerialNumber = asyncHandler(async (req, res, next) => {
 exports.saveDiecutSN = async (req, res, next) => {
   try {
     // Validate request body
-    const { diecutId, SNList } = req.body;
+    const { diecutId, SNList,diecut_TYPE,STATUS } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    console.log(ORG_ID, EMP_ID)
     
     if (!diecutId || !SNList || !Array.isArray(SNList) || SNList.length === 0) {
       return next(new ApiError('Invalid request body. Required: diecutId and non-empty SNList array', 400));
@@ -209,7 +211,7 @@ exports.saveDiecutSN = async (req, res, next) => {
     logger.info(`Saving diecut SN list for: ${diecutId}, count: ${SNList.length}`);
     
     // Call service function to handle database operations
-    const result = await DiecutStatus.saveDiecutSNList(diecutId, SNList);
+    const result = await DiecutStatus.saveDiecutSNList(diecutId, SNList,diecut_TYPE,ORG_ID, EMP_ID,STATUS );
     
     // Return success response
     res.status(200).json(formatResponse(
@@ -269,6 +271,7 @@ exports.saveDiecutModiSN = async (req, res, next) => {
       probDesc, 
       remark 
     } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
     
     if (!diecutId || !diecutSN) {
       return next(new ApiError('Invalid request body. Required: diecutId and diecutSN', 400));
@@ -303,6 +306,142 @@ exports.saveDiecutModiSN = async (req, res, next) => {
   }
 }
 
+exports.saveTypeRequest = async (req, res, next) => {
+  try {
+    const { 
+      diecutId, 
+      diecutSN,
+      modifyTypeAppvFlag 
+    } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    if (!diecutId || !diecutSN) {
+      return next(new ApiError('Invalid request body. Required: diecutId and diecutSN', 400));
+    }
+    
+    logger.info(`Saving blade modification for: ${diecutSN}+ ${modifyTypeAppvFlag}`);
+    
+    const result = await DiecutSN.saveTypeChange({
+      diecutId,
+      diecutSN,
+      modifyTypeAppvFlag,  ORG_ID, EMP_ID
+    });
+    
+    res.status(200).json(formatResponse(
+      true,
+      'Blade modification saved successfully',
+      { 
+        diecutSN,
+        result: result
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+exports.verifyApprover = async (req, res, next) => {
+  try {
+    const { 
+      username, 
+      password,
+      requiredPositionId 
+    } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    if (!username || !password) {
+      return next(new ApiError('Invalid request body. Required: username and password', 400));
+    }
+    
+    logger.info(`Saving blade modification for: ${username}`);
+    
+    // const result = await DiecutSN.verifyApproverPOS({
+    //   requiredPositionId
+    // });
+    
+    res.status(200).json(formatResponse(
+      true,
+      'Blade modification saved successfully',
+      { 
+        username,
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+exports.approveTypeChange = async (req, res, next) => {
+  try {
+    const { 
+      diecutId, 
+      diecutSN,
+      modifyType
+    } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    if (!diecutId || !diecutSN) {
+      return next(new ApiError('Invalid request body. Required: diecutId and diecutSN', 400));
+    }
+    
+    logger.info(`Saving blade modification for: ${diecutSN}+ ${modifyType}`);
+    
+    const result = await DiecutSN.approveTypeChange({
+      diecutId,
+      diecutSN,
+      modifyType
+    });
+    
+    res.status(200).json(formatResponse(
+      true,
+      'Blade modification saved successfully',
+      { 
+        diecutSN,
+        result: result
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+exports.cancelTypeChange = async (req, res, next) => {
+  try {
+    const { 
+      diecutId, 
+      diecutSN,
+    } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    if (!diecutId || !diecutSN) {
+      return next(new ApiError('Invalid request body. Required: diecutId and diecutSN', 400));
+    }
+    
+    logger.info(`Saving blade modification for: ${diecutSN}`);
+    
+    const result = await DiecutSN.cancelTypeChange({
+      diecutId,
+      diecutSN,
+    });
+    
+    res.status(200).json(formatResponse(
+      true,
+      'Blade modification saved successfully',
+      { 
+        diecutSN,
+        result: result
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+
 exports.getDiecuttypes = async (req, res, next) => {
   try {
     
@@ -331,6 +470,9 @@ exports.getDiecutStatusReport = asyncHandler(async (req, res, next) => {
       diecutType: req.query.diecutType,
       priority: req.query.priority
     };
+    console.log( req.user)
+    const { ORG_ID, EMP_ID } = req.user;
+    // console.log(JSON.stringify(req.headers.authorization));
     
     // Get data from the model
     const diecuts = await DiecutStatus.getStatusReport(filters);

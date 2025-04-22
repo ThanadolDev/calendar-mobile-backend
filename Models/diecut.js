@@ -347,17 +347,17 @@ class DiecutSN {
 )
         `;
       }
-      console.log(modifyQuery)
-      console.log({
-        diecut_sn: diecutSN,
-        start_time: formattedStartTime,
-        end_time: formattedEndTime,
-        blade_type: bladeType,
-        multi_blade_reason: multiBladeReason,
-        multi_blade_remark: multiBladeRemark,
-        prob_desc: probDesc,
-        remark: remark
-      })
+      // console.log(modifyQuery)
+      // console.log({
+      //   diecut_sn: diecutSN,
+      //   start_time: formattedStartTime,
+      //   end_time: formattedEndTime,
+      //   blade_type: bladeType,
+      //   multi_blade_reason: multiBladeReason,
+      //   multi_blade_remark: multiBladeRemark,
+      //   prob_desc: probDesc,
+      //   remark: remark
+      // })
       const modifyResult = await executeQuery(modifyQuery, {
         diecut_sn: diecutSN,
         start_time: formattedStartTime || '1900-01-02',
@@ -404,6 +404,132 @@ class DiecutSN {
       throw error;
     }
   }
+
+  static async saveTypeChange(bladeData) {
+    try {
+      const {
+        diecutId,
+        diecutSN,modifyTypeAppvFlag,  ORG_ID, EMP_ID
+      } = bladeData;
+
+      logger.info(`Saving blade modification for: ${diecutSN}`);
+
+      const updateSNQuery = `
+        UPDATE KPDBA.DIECUT_MODIFY
+        SET MODIFY_TYPE_APPV_FLAG = :modifyTypeAppvFlag
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+      console.log(updateSNQuery)
+
+      await executeQuery(updateSNQuery, {
+        diecut_sn: diecutSN,
+        modifyTypeAppvFlag: modifyTypeAppvFlag
+      });
+ 
+      return {
+        success: true,
+        message: 'Blade data updated'
+      };
+
+    } catch (error) {
+      logger.error('Error in DiecutService.saveBlade:', error);
+      throw error;
+    }
+  }
+
+  static async approveTypeChange(bladeData) {
+    try {
+      const {
+        diecutId, 
+      diecutSN,
+      modifyType
+      } = bladeData;
+
+      logger.info(`Saving blade modification for: ${diecutSN}`);
+
+      const updateSNQuery = `
+        UPDATE KPDBA.DIECUT_MODIFY
+        SET MODIFY_TYPE_APPV_FLAG = 'A'
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+      console.log(updateSNQuery)
+
+      await executeQuery(updateSNQuery, {
+        diecut_sn: diecutSN,
+      });
+ 
+      return {
+        success: true,
+        message: 'Blade data updated'
+      };
+
+    } catch (error) {
+      logger.error('Error in DiecutService.saveBlade:', error);
+      throw error;
+    }
+  }
+
+  static async cancelTypeChange(bladeData) {
+    try {
+      const {
+        diecutId, 
+      diecutSN
+      } = bladeData;
+
+      logger.info(`Saving blade modification for: ${diecutSN}`);
+
+      const updateSNQuery = `
+        UPDATE KPDBA.DIECUT_MODIFY
+        SET MODIFY_TYPE_APPV_FLAG = NULL
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+      // console.log(updateSNQuery)
+
+      await executeQuery(updateSNQuery, {
+        diecut_sn: diecutSN,
+      });
+ 
+      return {
+        success: true,
+        message: 'Blade data updated'
+      };
+
+    } catch (error) {
+      logger.error('Error in DiecutService.saveBlade:', error);
+      throw error;
+    }
+  }
+
+  static async verifyApproverPOS(bladeData) {
+    try {
+      const {
+        requiredPositionId
+      } = bladeData;
+
+      logger.info(`Saving blade modification for: ${requiredPositionId}`);
+
+      const updateSNQuery = `
+        UPDATE KPDBA.DIECUT_MODIFY
+        SET MODIFY_TYPE_APPV_FLAG = :modifyTypeAppvFlag
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+      console.log(updateSNQuery)
+
+      // await executeQuery(updateSNQuery, {
+      //   diecut_sn: diecutSN,
+      //   modifyTypeAppvFlag: modifyTypeAppvFlag
+      // });
+ 
+      return {
+        success: true,
+        message: 'Blade data updated'
+      };
+
+    } catch (error) {
+      logger.error('Error in DiecutService.saveBlade:', error);
+      throw error;
+    }
+  }
 }
 
 class DiecutStatus {
@@ -413,10 +539,10 @@ class DiecutStatus {
    * @returns {Promise<Array>} - Array of diecut status objects
    */
 
-  static async saveDiecutSNList(diecutId, snList) {
+  static async saveDiecutSNList(diecutId, snList,diecut_TYPE,ORG_ID, EMP_ID,STATUS ) {
     try {
       logger.info(`Saving ${snList.length} SN entries for diecut ID: ${diecutId}`);
-      console.log(diecutId, snList);
+      // console.log(diecutId, snList);
       
       let savedCount = 0;
       let modifyCount = 0;
@@ -433,15 +559,16 @@ class DiecutStatus {
       
       const insertSNQuery = `
         INSERT INTO KPDBA.DIECUT_SN
-        (DIECUT_SN, DIECUT_ID, DIECUT_AGE)
-        VALUES (:DIECUT_SN, :DIECUT_ID, 0)
+        (DIECUT_SN, DIECUT_ID, DIECUT_AGE,DIECUT_TYPE,CR_DATE,CR_USER_ID,CR_ORG_ID)
+        VALUES (:DIECUT_SN, :DIECUT_ID ,0,:diecut_TYPE,SYSDATE,:EMP_ID, :ORG_ID)
       `;
       
       const insertModifyQuery = `
-        INSERT INTO KPDBA.DIECUT_MODIFY
-        (DIECUT_SN, MODIFY_TYPE)
-        VALUES (:DIECUT_SN, :MODIFY_TYPE)
-      `;
+    INSERT INTO KPDBA.DIECUT_MODIFY
+    (DIECUT_SN, START_TIME, MODIFY_TYPE, CR_DATE, CR_USER_ID, CR_ORG_ID)
+    VALUES (:DIECUT_SN, TO_DATE('01/01/1900', 'MM/DD/YYYY'), 'N', SYSDATE, :EMP_ID, :ORG_ID)
+`;
+
       
       for (const sn of snList) {
         if (!sn.DIECUT_SN) {
@@ -465,20 +592,24 @@ class DiecutStatus {
         const result = await executeQuery(insertSNQuery,
           {
             DIECUT_SN: sn.DIECUT_SN,
-            DIECUT_ID: diecutId
+            DIECUT_ID: diecutId,
+            diecut_TYPE: diecut_TYPE,
+            ORG_ID: ORG_ID, 
+            EMP_ID: EMP_ID
           },
           { autoCommit: false });
         
         savedCount++;
         
         // if (sn.DIECUT_TYPE) {
-        //   const result = await executeQuery(insertModifyQuery,
-        //     {
-        //       DIECUT_SN: sn.DIECUT_SN,
-        //       MODIFY_TYPE: sn.DIECUT_TYPE
-        //     },
-        //     { autoCommit: false });
-        //   modifyCount++;
+          const result1 = await executeQuery(insertModifyQuery,
+            {
+              DIECUT_SN: sn.DIECUT_SN,
+              ORG_ID: ORG_ID, 
+              EMP_ID: EMP_ID
+            },
+            { autoCommit: false });
+          modifyCount++;
         // }
       }
   
@@ -506,11 +637,11 @@ class DiecutStatus {
 
   static async getStatusReport(filters = {}) {
     try {
-      console.log(filters)
+      // console.log(filters)
       const sql = `
         SELECT DSN.DIECUT_ID, DSN.DIECUT_SN, DSN.AGES, DSN.USED, DSN.REMAIN, DSN.DIECUT_NEAR_EXP
         , CASE WHEN DSN.REMAIN <= 0 THEN '1' WHEN DSN.REMAIN <= DSN.DIECUT_NEAR_EXP THEN '2' ELSE '3' END PRIORITY
-        , DSN.STATUS, DSN.DIECUT_TYPE, DSN.TL_STATUS, DSN.LAST_MODIFY, DSN.DUE_DATE, DM.MODIFY_TYPE 
+        , DSN.STATUS, DSN.DIECUT_TYPE, DSN.TL_STATUS, DSN.LAST_MODIFY, DSN.DUE_DATE, DM.MODIFY_TYPE ,TL.BLANK_SIZE_X, TL.BLANK_SIZE_Y
         FROM (
             SELECT SN.DIECUT_ID, SN.DIECUT_SN, NVL(SN.DIECUT_AGE,0) AGES
             , CASE 
@@ -555,6 +686,23 @@ class DiecutStatus {
             WHERE NVL(SN.STATUS,'F') <> 'F' AND SN.TL_STATUS = 'GOOD'
         ) DSN  
         LEFT JOIN KPDBA.DIECUT_MODIFY DM ON (DSN.DIECUT_SN = DM.DIECUT_SN AND DM.END_TIME IS NULL AND DM.CANCEL_FLAG = 'F')
+        LEFT JOIN (
+    SELECT DIECUT_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y, CANCEL_FLAG FROM KPDBA.DIECUT 
+    UNION ALL
+    SELECT BLANKING_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y, CANCEL_FLAG  FROM KPDBA.BLANKING
+    UNION ALL
+    SELECT STRIPPING_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y AS BLANK_SIZE_Y, CANCEL_FLAG  FROM KPDBA.STRIPPING 
+    UNION ALL
+    SELECT PLATE_ID AS TOOLING_ID, PAPER_SIZE_X AS BLANK_SIZE_X, PAPER_SIZE_Y, CANCEL_FLAG  FROM KPDBA.PLATE
+    UNION ALL
+    SELECT BLANKET_UV_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y, CANCEL_FLAG  FROM KPDBA.BLANKET_UV
+    UNION ALL
+    SELECT BLANKET_COAT_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y, CANCEL_FLAG  FROM KPDBA.BLANKET_COAT
+    UNION ALL
+    SELECT PUMP_SWELL_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y, CANCEL_FLAG  FROM KPDBA.PUMP_SWELL
+    UNION ALL
+    SELECT PUMP_K_ID AS TOOLING_ID, BLANK_SIZE_X, BLANK_SIZE_Y, CANCEL_FLAG  FROM KPDBA.PUMP_K
+) TL ON DSN.DIECUT_ID = TL.TOOLING_ID
       `;
 
       let whereClause = '';
@@ -582,7 +730,7 @@ class DiecutStatus {
       
       // Handle the priority filter separately since it uses the computed PRIORITY column
       if (filters.priority) {
-        finalSql = `SELECT * FROM (${finalSql}) WHERE PRIORITY = :priority`;
+        finalSql = `SELECT * FROM (${finalSql})`;
         binds.priority = filters.priority;
       }
       
@@ -703,7 +851,7 @@ class DiecutStatus {
    static async getDiecutSNList(diecutId) {
     try {
       logger.info(` SN entries for diecut ID: ${diecutId}`);
-      console.log(diecutId);
+      // console.log(diecutId);
       
       
       const checkSNQuery = `
@@ -719,7 +867,8 @@ class DiecutStatus {
     DM.MULTI_BLADE_REASON,
     DM.MULTI_BLADE_REMARK,
     DM.PROB_DESC,
-    DM.REMARK
+    DM.REMARK,
+    DM.MODIFY_TYPE
 FROM 
     KPDBA.DIECUT_SN DS
 LEFT JOIN 
@@ -735,7 +884,7 @@ ORDER BY
       const checkResult = await executeQuery(checkSNQuery, 
         { s_diecut_id: diecutId }
       );
-      console.log(checkResult.rows)
+      // console.log(checkResult.rows)
   
 
       return {
@@ -753,14 +902,15 @@ ORDER BY
       
       const checkSNQuery = `
                 
-       SELECT DISTINCT DIECUT_TYPE FROM KPDBA.DIECUT_SN
+        SELECT PTC_TYPE, PTC_DESC
+FROM KPDBA.PTC_TYPE_MASTER
 
       `;
       
       
       const checkResult = await executeQuery(checkSNQuery
       );
-      console.log(checkResult.rows)
+      // console.log(checkResult.rows)
   
 
       return {
