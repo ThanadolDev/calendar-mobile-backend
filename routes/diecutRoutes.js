@@ -33,6 +33,8 @@ router.post('/savediecut', diecutController.saveDiecutSN);
 
 router.post('/getdiecutsn', diecutController.getDiecutSN);
 
+router.post('/getdiecutsndetail', diecutController.getDiecutSNDetail);
+
 router.post('/savediecutmodidetail', diecutController.saveDiecutModiSN);
 
 router.post('/changetyperequest', diecutController.saveTypeRequest);

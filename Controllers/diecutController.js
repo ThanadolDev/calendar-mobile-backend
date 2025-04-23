@@ -257,6 +257,36 @@ exports.getDiecutSN = async (req, res, next) => {
   }
 }
 
+exports.getDiecutSNDetail = async (req, res, next) => {
+  try {
+    // Validate request body
+    const { diecutId,diecutSN } = req.body;
+    
+    if (!diecutId ) {
+      return next(new ApiError('Invalid request body. Required: diecutId ', 400));
+    }
+    
+    // Log request for debugging
+    logger.info(`Find diecut SN list for: ${diecutId}`);
+    
+    // Call service function to handle database operations
+    const result = await DiecutStatus.getDiecutSNDetail(diecutId,diecutSN);
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Diecut SN list saved successfully',
+      { 
+        diecutId,
+        diecutList: result.checkResult.rows
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
 exports.saveDiecutModiSN = async (req, res, next) => {
   try {
     const { 

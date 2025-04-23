@@ -896,6 +896,55 @@ ORDER BY
     }
   }
 
+  static async getDiecutSNDetail(diecutId,diecutSN) {
+    try {
+      logger.info(` SN entries for diecut ID: ${diecutId}`);
+      // console.log(diecutId);
+      
+      
+      const checkSNQuery = `
+                
+        SELECT 
+    DS.DIECUT_ID,
+    DS.DIECUT_SN,
+    DS.DIECUT_AGE,
+    DS.STATUS,
+    DM.START_TIME,
+    DM.END_TIME,
+    DM.BLADE_TYPE,
+    DM.MULTI_BLADE_REASON,
+    DM.MULTI_BLADE_REMARK,
+    DM.PROB_DESC,
+    DM.REMARK,
+    DM.MODIFY_TYPE
+FROM 
+    KPDBA.DIECUT_SN DS
+LEFT JOIN 
+    KPDBA.DIECUT_MODIFY DM ON DS.DIECUT_SN = DM.DIECUT_SN
+WHERE 
+    DS.DIECUT_ID = :s_diecut_id
+AND DS.DIECUT_SN = :s_diecut_sn
+ORDER BY 
+    DS.DIECUT_SN ASC
+
+      `;
+      
+      
+      const checkResult = await executeQuery(checkSNQuery, 
+        { s_diecut_id: diecutId, s_diecut_sn: diecutSN }
+      );
+      // console.log(checkResult.rows)
+  
+
+      return {
+        checkResult
+      };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveDiecutSNList:', error);
+      throw error;
+    }
+  }
+
   static async getDiecutTypeList() {
     try {
       
