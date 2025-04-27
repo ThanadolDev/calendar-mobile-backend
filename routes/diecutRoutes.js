@@ -29,6 +29,7 @@ router.get('/status', diecutController.getDiecutStatusReport);
 
 router.get('/status/summary', diecutController.getDiecutStatusSummary);
 
+
 router.post('/savediecut', diecutController.saveDiecutSN);
 
 router.post('/getdiecutsn', diecutController.getDiecutSN);
@@ -44,6 +45,10 @@ router.post('/verifyapprover', diecutController.verifyApprover);
 router.post('/approvetypechange', diecutController.approveTypeChange);
 
 router.post('/canceltypechange', diecutController.cancelTypeChange);
+
+router.post('/getbladechangecount', diecutController.getBladeChangeCount);
+
+router.post('/orderchange', diecutController.orderChange);
 
 router.get('/types', diecutController.getDiecuttypes);
 

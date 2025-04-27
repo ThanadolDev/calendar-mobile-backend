@@ -447,15 +447,27 @@ class DiecutSN {
 
       logger.info(`Saving blade modification for: ${diecutSN}`);
 
-      const updateSNQuery = `
+      const updateMDQuery = `
         UPDATE KPDBA.DIECUT_MODIFY
-        SET MODIFY_TYPE_APPV_FLAG = 'A'
+        SET MODIFY_TYPE_APPV_FLAG = 'A' , MODIFY_TYPE = :modifyType
+        WHERE DIECUT_SN = :diecut_sn
+      `;
+
+      await executeQuery(updateMDQuery, {
+        diecut_sn: diecutSN,
+        modifyType: modifyType
+      });
+
+      const updateSNQuery = `
+        UPDATE KPDBA.DIECUT_SN
+        SET STATUS = :modifyType
         WHERE DIECUT_SN = :diecut_sn
       `;
       console.log(updateSNQuery)
 
       await executeQuery(updateSNQuery, {
         diecut_sn: diecutSN,
+        modifyType: modifyType
       });
  
       return {
@@ -559,14 +571,14 @@ class DiecutStatus {
       
       const insertSNQuery = `
         INSERT INTO KPDBA.DIECUT_SN
-        (DIECUT_SN, DIECUT_ID, DIECUT_AGE,DIECUT_TYPE,CR_DATE,CR_USER_ID,CR_ORG_ID)
-        VALUES (:DIECUT_SN, :DIECUT_ID ,0,:diecut_TYPE,SYSDATE,:EMP_ID, :ORG_ID)
+        (DIECUT_SN, DIECUT_ID, DIECUT_AGE,DIECUT_TYPE,CR_DATE,CR_USER_ID,CR_ORG_ID,STATUS)
+        VALUES (:DIECUT_SN, :DIECUT_ID ,0,:diecut_TYPE,SYSDATE,:EMP_ID, :ORG_ID, :STATUS)
       `;
       
       const insertModifyQuery = `
     INSERT INTO KPDBA.DIECUT_MODIFY
     (DIECUT_SN, START_TIME, MODIFY_TYPE, CR_DATE, CR_USER_ID, CR_ORG_ID)
-    VALUES (:DIECUT_SN, TO_DATE('01/01/1900', 'MM/DD/YYYY'), 'N', SYSDATE, :EMP_ID, :ORG_ID)
+    VALUES (:DIECUT_SN, TO_DATE('01/01/1900', 'MM/DD/YYYY'), :MODIFY_TYPE , SYSDATE, :EMP_ID, :ORG_ID)
 `;
 
       
@@ -595,7 +607,8 @@ class DiecutStatus {
             DIECUT_ID: diecutId,
             diecut_TYPE: diecut_TYPE,
             ORG_ID: ORG_ID, 
-            EMP_ID: EMP_ID
+            EMP_ID: EMP_ID,
+            STATUS: STATUS
           },
           { autoCommit: false });
         
@@ -606,7 +619,8 @@ class DiecutStatus {
             {
               DIECUT_SN: sn.DIECUT_SN,
               ORG_ID: ORG_ID, 
-              EMP_ID: EMP_ID
+              EMP_ID: EMP_ID,
+              MODIFY_TYPE: STATUS
             },
             { autoCommit: false });
           modifyCount++;
@@ -714,9 +728,24 @@ class DiecutStatus {
         binds.diecutId = filters.diecutId;
       }
       
-      if (filters.diecutType) {
-        whereClause += ' AND SN.DIECUT_TYPE = :diecutType';
-        binds.diecutType = filters.diecutType;
+      if (filters.diecutType && filters.diecutType.length > 0) {
+        // Check if it's an array with multiple values
+        if (Array.isArray(filters.diecutType) && filters.diecutType.length > 1) {
+          // Create a placeholder for each item in the array (e.g., ":diecutType0, :diecutType1")
+          const placeholders = filters.diecutType.map((_, index) => `:diecutType${index}`).join(', ');
+          
+          // Add the IN clause to the where condition
+          whereClause += ` AND SN.DIECUT_TYPE IN (${placeholders})`;
+          
+          // Add each value to the binds object with its own placeholder name
+          filters.diecutType.forEach((type, index) => {
+            binds[`diecutType${index}`] = type;
+          });
+        } else {
+          // Handle single value (either a string or an array with one element)
+          whereClause += ' AND SN.DIECUT_TYPE = :diecutType';
+          binds.diecutType = Array.isArray(filters.diecutType) ? filters.diecutType[0] : filters.diecutType;
+        }
       }
       
       // Modify the main SQL query to include these conditions
@@ -890,6 +919,79 @@ ORDER BY
       return {
         checkResult
       };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveDiecutSNList:', error);
+      throw error;
+    }
+  }
+
+  static async getBladeChangeCount(diecutId,diecutSN) {
+    try {
+      logger.info(` SN entries for diecut ID: ${diecutId}`);
+      // console.log(diecutId);
+      
+      
+      const checkSNQuery = `
+                
+        SELECT blade_change_count 
+      FROM kpdba.diecut_sn 
+      WHERE diecut_id = :diecutId AND diecut_sn = :diecutSN
+
+      `;
+      
+      
+      const checkResult = await executeQuery(checkSNQuery, 
+        { diecutId:diecutId,diecutSN: diecutSN }
+      );
+      // console.log(checkResult.rows)
+  
+
+      return {
+        checkResult
+      };
+    } catch (error) {
+      logger.error('Error in DiecutService.saveDiecutSNList:', error);
+      throw error;
+    }
+  }
+
+
+  static async orderChange(diecutId, diecutSN, modifyType, problemDesc, dueDate) {
+    try {
+      logger.info(` SN entries for diecut ID: ${diecutId}`);
+      // console.log(diecutId);
+      
+      
+      const updateQuery = `
+        UPDATE kpdba.diecut_sn
+        SET 
+          status = :modifyType,
+          prob_desc = :problemDesc
+        WHERE diecut_id = :diecutId AND diecut_sn = :diecutSN
+      `;
+      
+      await executeQuery(updateQuery, {
+        modifyType,
+        problemDesc: problemDesc || null,
+        diecutId,
+        diecutSN
+      });
+      
+      // If it's a blade change (B), increment the blade_change_count
+      if (modifyType === 'B') {
+        const incrementQuery = `
+          UPDATE kpdba.diecut_sn
+          SET blade_change_count = NVL(blade_change_count, 0) + 1
+          WHERE diecut_id = :diecutId AND diecut_sn = :diecutSN
+        `;
+        
+        await executeQuery(incrementQuery, { diecutId, diecutSN });
+      }
+      
+      // console.log(checkResult.rows)
+  
+
+      return true;
     } catch (error) {
       logger.error('Error in DiecutService.saveDiecutSNList:', error);
       throw error;

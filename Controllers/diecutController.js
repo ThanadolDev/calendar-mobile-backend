@@ -287,6 +287,76 @@ exports.getDiecutSNDetail = async (req, res, next) => {
   }
 }
 
+exports.getBladeChangeCount = async (req, res, next) => {
+  try {
+    // Validate request body
+    const { diecutId,diecutSN } = req.body;
+    
+    if (!diecutId ) {
+      return next(new ApiError('Invalid request body. Required: diecutId ', 400));
+    }
+    
+    // Log request for debugging
+    logger.info(`Find diecut SN list for: ${diecutId}`);
+    
+    // Call service function to handle database operations
+    const result = await DiecutStatus.getBladeChangeCount(diecutId,diecutSN);
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Diecut SN list saved successfully',
+      { 
+        diecutId,
+        diecutList: result.checkResult.rows
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
+exports.orderChange = async (req, res, next) => {
+  try {
+    // Validate request body
+    const { diecutId, diecutSN, modifyType, problemDesc, dueDate } = req.body;
+
+    if (!diecutId || !diecutSN || !modifyType) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing required parameters: diecutId, diecutSN, or modifyType'
+      });
+    }
+    
+    // For type E (repair), problem description is required
+    if (modifyType === 'E' && !problemDesc) {
+      return res.status(400).json({
+        success: false,
+        message: 'Problem description is required for repair (E) type'
+      });
+    }
+    if (!diecutId ) {
+      return next(new ApiError('Invalid request body. Required: diecutId ', 400));
+    }
+    
+    // Log request for debugging
+    logger.info(`Find diecut SN list for: ${diecutId}`);
+    
+    // Call service function to handle database operations
+    const result = await DiecutStatus.orderChange(diecutId,diecutSN, modifyType, problemDesc, dueDate);
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Diecut saved successfully'
+    ));
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
 exports.saveDiecutModiSN = async (req, res, next) => {
   try {
     const { 
@@ -408,7 +478,7 @@ exports.approveTypeChange = async (req, res, next) => {
     const { 
       diecutId, 
       diecutSN,
-      modifyType
+      modifyType,
     } = req.body;
     const { ORG_ID, EMP_ID } = req.user;
     
@@ -497,10 +567,12 @@ exports.getDiecutStatusReport = asyncHandler(async (req, res, next) => {
     // ters
     const filters = {
       diecutId: req.query.diecutId,
-      diecutType: req.query.diecutType,
+      diecutType: req.query.diecutType.split(','),
       priority: req.query.priority
     };
-    console.log( req.user)
+    
+    diecutType1 = req.query.diecutType.split(',');
+    console.log( diecutType1)
     const { ORG_ID, EMP_ID } = req.user;
     // console.log(JSON.stringify(req.headers.authorization));
     
