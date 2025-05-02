@@ -257,6 +257,8 @@ exports.getDiecutSN = async (req, res, next) => {
   }
 }
 
+
+
 exports.getDiecutSNDetail = async (req, res, next) => {
   try {
     // Validate request body
@@ -359,17 +361,127 @@ exports.orderChange = async (req, res, next) => {
 
 exports.saveDiecutModiSN = async (req, res, next) => {
   try {
+    const data = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    // Check if input is an array or single object
+    const isArray = Array.isArray(data);
+    const dataArray = isArray ? data : [data];
+    
+    // Validate input data
+    for (const item of dataArray) {
+      const { diecutId, diecutSN } = item;
+      if (!diecutId || !diecutSN) {
+        return next(new ApiError('Invalid request body. Required: diecutId and diecutSN for each item', 400));
+      }
+    }
+    
+    logger.info(`Saving blade modification for ${dataArray.length} items`);
+    
+    // Process each item and collect results
+    const results = [];
+    for (const item of dataArray) {
+      const result = await DiecutSN.saveBlade(item);
+      results.push({
+        diecutSN: item.diecutSN,
+        result: result
+      });
+    }
+    
+    res.status(200).json(formatResponse(
+      true,
+      `Blade modification${dataArray.length > 1 ? 's' : ''} saved successfully`,
+      { results }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+exports.updateJobInfo = async (req, res, next) => {
+  try {
     const { 
       diecutId, 
-      diecutSN, 
-      diecutAge,
-      startTime, 
-      endTime, 
-      bladeType, 
-      multiBladeReason, 
-      multiBladeRemark, 
-      probDesc, 
-      remark 
+      diecutSn, 
+      jobId,
+      prodId,
+      revision,
+      prodDesc,
+    } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    if (!req.body.diecutSn) {
+      console.log(req.body)
+      return next(new ApiError('Invalid request body. Required:  diecutSN', 400));
+    }
+    
+    logger.info(`Saving blade modification for: ${diecutSn}`);
+    
+    const result = await DiecutSN.updateJobInfo({
+      diecutId,
+      diecutSn,
+      jobId,
+      prodId,
+      revision,
+      prodDesc,
+    });
+    
+    res.status(200).json(formatResponse(
+      true,
+      'Blade modification saved successfully',
+      { 
+        diecutSn,
+        result: result
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+exports.updatedate = async (req, res, next) => {
+  try {
+    const { 
+      diecutId, 
+      diecutSn, 
+      dueDate
+    } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    
+    if (!req.body.diecutSn) {
+      console.log(req.body)
+      return next(new ApiError('Invalid request body. Required:  diecutSN', 400));
+    }
+    
+    logger.info(`Saving blade modification for: ${diecutSn}`);
+    
+    const result = await DiecutSN.updateDate({
+      diecutId,
+      diecutSn,
+      dueDate
+    });
+    
+    res.status(200).json(formatResponse(
+      true,
+      'Blade modification saved successfully',
+      { 
+        diecutSn,
+        result: result
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving blade modification', error);
+    return next(new ApiError('Failed to save blade modification', 500));
+  }
+}
+
+exports.cancelOrder = async (req, res, next) => {
+  try {
+    const { 
+      diecutId, 
+      diecutSN,
     } = req.body;
     const { ORG_ID, EMP_ID } = req.user;
     
@@ -379,17 +491,9 @@ exports.saveDiecutModiSN = async (req, res, next) => {
     
     logger.info(`Saving blade modification for: ${diecutSN}`);
     
-    const result = await DiecutSN.saveBlade({
+    const result = await DiecutSN.cancelOrder({
       diecutId,
-      diecutSN,
-      diecutAge,
-      startTime,
-      endTime,
-      bladeType,
-      multiBladeReason,
-      multiBladeRemark,
-      probDesc,
-      remark
+      diecutSN,ORG_ID, EMP_ID 
     });
     
     res.status(200).json(formatResponse(
@@ -558,6 +662,28 @@ exports.getDiecuttypes = async (req, res, next) => {
   } catch (error) {
     logger.error('Error saving diecut SN list', error);
     return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
+exports.getDiecutOpenJobs = async (req, res, next) => {
+  try {
+    // Extract search query from request body
+    const { searchQuery } = req.body;
+    
+    // Pass searchQuery to service method
+    const result = await DiecutStatus.getDiecutOpenJobs(searchQuery);
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Diecut Type list successfully',
+      { 
+        diecutType: result.checkResult.rows
+      }
+    ));
+  } catch (error) {
+    logger.error('Error fetching open job orders', error);
+    return next(new ApiError('Failed to fetch open job orders', 500));
   }
 }
 

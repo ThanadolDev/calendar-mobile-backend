@@ -34,9 +34,15 @@ router.post('/savediecut', diecutController.saveDiecutSN);
 
 router.post('/getdiecutsn', diecutController.getDiecutSN);
 
+router.post('/cancelorder', diecutController.cancelOrder);
+
 router.post('/getdiecutsndetail', diecutController.getDiecutSNDetail);
 
 router.post('/savediecutmodidetail', diecutController.saveDiecutModiSN);
+
+router.post('/updatejobinfo', diecutController.updateJobInfo);
+
+router.post('/updatedate', diecutController.updatedate);
 
 router.post('/changetyperequest', diecutController.saveTypeRequest);
 
@@ -51,5 +57,7 @@ router.post('/getbladechangecount', diecutController.getBladeChangeCount);
 router.post('/orderchange', diecutController.orderChange);
 
 router.get('/types', diecutController.getDiecuttypes);
+
+router.post('/openjobs', diecutController.getDiecutOpenJobs);
 
 module.exports = router;
