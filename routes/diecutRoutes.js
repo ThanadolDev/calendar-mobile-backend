@@ -44,6 +44,10 @@ router.post('/updatejobinfo', diecutController.updateJobInfo);
 
 router.post('/updatedate', diecutController.updatedate);
 
+router.post('/updateorderdate', diecutController.updateorderdate);
+
+router.post('/updateorderinfo', diecutController.updateOrderInfo);
+
 router.post('/changetyperequest', diecutController.saveTypeRequest);
 
 router.post('/verifyapprover', diecutController.verifyApprover);
@@ -53,6 +57,8 @@ router.post('/approvetypechange', diecutController.approveTypeChange);
 router.post('/canceltypechange', diecutController.cancelTypeChange);
 
 router.post('/getbladechangecount', diecutController.getBladeChangeCount);
+
+router.post('/getjoborderlist', diecutController.getJobOrderList);
 
 router.post('/orderchange', diecutController.orderChange);
 
