@@ -322,7 +322,7 @@ exports.getBladeChangeCount = async (req, res, next) => {
 exports.getJobOrderList = async (req, res, next) => {
   try {
     // Validate request body
-    const { diecutId } = req.body;
+    const { diecutId, DIECUT_TYPE } = req.body;
     
     if (!diecutId ) {
       return next(new ApiError('Invalid request body. Required: diecutId ', 400));
@@ -332,7 +332,7 @@ exports.getJobOrderList = async (req, res, next) => {
     logger.info(`Find diecut SN list for: ${diecutId}`);
     
     // Call service function to handle database operations
-    const result = await DiecutStatus.getJobOrderList(diecutId);
+    const result = await DiecutStatus.getJobOrderList(diecutId,DIECUT_TYPE);
     
     // Return success response
     res.status(200).json(formatResponse(

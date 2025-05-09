@@ -1236,7 +1236,7 @@ ORDER BY
     }
   }
 
-  static async getJobOrderList(diecutId) {
+  static async getJobOrderList(diecutId,DIECUT_TYPE) {
     try {
       logger.info(` SN entries for diecut ID: ${diecutId}`);
       // console.log(diecutId);
@@ -1268,6 +1268,7 @@ JOIN (
     UNION ALL
     SELECT JOB_ID, STRIPPING_ID AS TOOLING_ID, 'ST' PTC_TYPE FROM KPDBA.JOB_PLATE WHERE STRIPPING_ID IS NOT NULL
 ) JP ON JS.JOB_ID = JP.JOB_ID 
+  WHERE JP.TOOLING_ID = :diecutId AND JP.PTC_TYPE = :DIECUT_TYPE
 UNION ALL 
 SELECT 'LSD' AS SRC, PM.PTC_TYPE, JP.DIECUT_ID, JB.JOB_ID,  (JB.FIRST_DUE - NVL(DEPT_COUNT,0) + NVL(STAMP_SEQ, 0) ) - 1 AS DATE_USING, (JB.FIRST_DUE - NVL(DEPT_COUNT,0) + NVL(STAMP_SEQ - 2, 0) ) - 1 AS ORDER_DATE, PM.BRANCH_ID
 FROM (
@@ -1297,31 +1298,41 @@ JOIN (
     UNION ALL
     SELECT JOB_ID, STRIPPING_ID AS TOOLING_ID, 'ST' PTC_TYPE FROM KPDBA.JOB_PLATE WHERE STRIPPING_ID IS NOT NULL
 ) JP ON PM.JOB_ID = JP.JOB_ID AND PM.PTC_TYPE = JP.PTC_TYPE
-WHERE JP.DIECUT_ID = :diecutId
-
+WHERE JP.DIECUT_ID = :diecutId AND JP.PTC_TYPE = :DIECUT_TYPE
+ORDER BY DATE_USING ASC
       `;
-      // console.log(checkSNQuery)
       const checkResult = await executeQuery(checkSNQuery, {
         diecutId: diecutId,
+        DIECUT_TYPE: DIECUT_TYPE
       });
-      const jobsql = `  SELECT jb.job_id, jb.job_desc, jd.prod_id, jd.revision, pd.prod_desc 
+
+      if(checkResult.rows.length == 0) {
+        return [];
+      }
+      // console.log(checkSNQuery)
+      const jobIds = checkResult.rows.map(row => row.JOB_ID);
+    
+      // Modify the job details query to get ALL jobs, not just the first one
+      const jobsql = `
+        SELECT jb.job_id, jb.job_desc, jd.prod_id, jd.revision, pd.prod_desc 
         FROM kpdba.job jb 
         JOIN kpdba.job_detail jd ON jb.job_id = jd.job_id
         JOIN kpdba.product pd ON jd.prod_id = pd.prod_id AND jd.revision = pd.revision
-        WHERE jb.status = 'O' AND jd.job_id = '${checkResult.rows[0].JOB_ID}'
-
-`;
-      const jobres = await executeQuery(jobsql)
-      console.log(checkResult.rows);
-      console.log(jobres.rows);
-
+        WHERE jb.status = 'O' AND jd.job_id IN (${jobIds.map(id => `'${id}'`).join(',')})
+      `;
+      
+      // Use parameterized query to prevent SQL injection
+      // const jobres = await executeQuery(jobsql, { jobIds: jobIds });
+      const jobres = await executeQuery(jobsql);
+      
+      // Combine the data
       const combinedLog = checkResult.rows.map(item1 => ({
         ...item1,
         ...(jobres.rows.find(item2 => item2.JOB_ID === item1.JOB_ID) || {})
       }));
       
-      console.log(combinedLog);
-
+      // Return just the array instead of wrapping it in an object
+   
       return {
         combinedLog
       };
