@@ -798,6 +798,28 @@ exports.getDiecutOpenJobs = async (req, res, next) => {
   }
 }
 
+exports.getUserRole = async (req, res, next) => {
+  try {
+    // Extract search query from request body
+    const { empId, posId } = req.body;
+    
+    // Pass searchQuery to service method
+    const result = await DiecutStatus.getUserRole(empId, posId);
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'get role successfully',
+      { 
+        roles: result.checkResult.rows
+      }
+    ));
+  } catch (error) {
+    logger.error('Error fetching open job orders', error);
+    return next(new ApiError('Failed to fetch open job orders', 500));
+  }
+}
+
 exports.getDiecutStatusReport = asyncHandler(async (req, res, next) => {
   try {
     // Extract filters from query parame
@@ -810,7 +832,7 @@ exports.getDiecutStatusReport = asyncHandler(async (req, res, next) => {
     
     diecutType1 = req.query.diecutType.split(',');
     console.log( diecutType1)
-    const { ORG_ID, EMP_ID } = req.user;
+    // const { ORG_ID, EMP_ID } = req.user;
     // console.log(JSON.stringify(req.headers.authorization));
     
     // Get data from the model

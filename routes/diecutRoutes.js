@@ -66,4 +66,6 @@ router.get('/types', diecutController.getDiecuttypes);
 
 router.post('/openjobs', diecutController.getDiecutOpenJobs);
 
+router.post('/getuserrole', diecutController.getUserRole);
+
 module.exports = router;

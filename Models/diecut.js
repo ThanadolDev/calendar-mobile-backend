@@ -1495,6 +1495,61 @@ FROM KPDBA.PTC_TYPE_MASTER
       throw error;
     }
   }
+
+  static async getUserRole(empId, posId) {
+    try {
+      // Oracle-compatible query
+      let checkQuery = `
+        SELECT 'DIECUT_STAMPING_MANAGER_POS' AS role
+        FROM KPDBA.profile
+        WHERE topic_name = 'DIECUT_STAMPING_MANAGER_POS'
+          AND (
+            ',' || topic_text || ',' LIKE '%,' || :posId || ',%' OR 
+            topic_text = :posId
+          )
+        UNION
+        SELECT 'DIECUT_STAMPING_MANAGER_UID' AS role
+        FROM KPDBA.profile
+        WHERE topic_name = 'DIECUT_STAMPING_MANAGER_UID'
+          AND (
+            ',' || topic_text || ',' LIKE '%,' || :empId || ',%' OR 
+            topic_text = :empId
+          )
+        UNION
+        SELECT 'DIECUT_PLANNING_POS' AS role
+        FROM KPDBA.profile
+        WHERE topic_name = 'DIECUT_PLANNING_POS'
+          AND (
+            ',' || topic_text || ',' LIKE '%,' || :posId2 || ',%' OR 
+            topic_text = :posId2
+          )
+      `;
+  
+      // Oracle named parameters
+      const params = {
+        posId: posId,
+        empId: empId,
+        posId2: posId // Using different parameter name to avoid confusion
+      };
+  
+      const checkResult = await executeQuery(checkQuery, params);
+      console.log(checkQuery, params)
+      console.log(checkResult)
+      // If no role is found, return View as default
+      if (!checkResult || checkResult.rows.length === 0) {
+        return {
+          checkResult: [{ role: 'VIEW' }]
+        };
+      }
+  
+      return {
+        checkResult
+      };
+    } catch (error) {
+      logger.error("Error in DiecutService.getUserRole:", error);
+      throw error;
+    }
+  }
 }
 
 module.exports = {
