@@ -82,3 +82,23 @@ exports.getVersion = asyncHandler(async (req, res, next) => {
     }
   });
 });
+
+exports.getUserRole = async (req, res, next) => {
+  try {
+    // Extract search query from request body
+    const { empId, posId } = req.body;
+    console.log(empId, posId )
+    // Pass searchQuery to service method
+    const result = await User.getUserRole(empId, posId);
+    console.log(result.rows)
+    // Return success response
+    res.status(200).json(
+      { 
+        roles: result.checkResult.rows
+      }
+  );
+  } catch (error) {
+    logger.error('Error fetching open job orders', error);
+    return next(new ApiError('Failed to fetch open job orders', 500));
+  }
+}
