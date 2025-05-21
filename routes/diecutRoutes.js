@@ -32,6 +32,10 @@ router.get('/status/summary', diecutController.getDiecutStatusSummary);
 
 router.post('/savediecut', diecutController.saveDiecutSN);
 
+router.post('/checklocation', diecutController.checkLocation);
+
+router.post('/insertlocation', diecutController.insertLocation);
+
 router.post('/getdiecutsn', diecutController.getDiecutSN);
 
 router.post('/cancelorder', diecutController.cancelOrder);

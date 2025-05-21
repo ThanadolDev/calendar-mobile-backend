@@ -606,13 +606,22 @@ WHERE DIECUT_SN = :diecut_sn
 
   static async updateOrderInfo(bladeData) {
     try {
-      const { diecutId, diecutSn, orderDate, ORG_ID, EMP_ID,jobId,
+      const {
+        diecutId,
+        diecutSn,
+        orderDate,
+        ORG_ID,
+        EMP_ID,
+        jobId,
         prodDesc,
-        prodId,REVISION,dueDate } = bladeData;
-        
+        prodId,
+        REVISION,
+        dueDate,
+      } = bladeData;
+
       const parsedorderDate = orderDate.split(", ")[0].replace(/\//g, "-");
       const parsedDueDate = dueDate.split(", ")[0].replace(/\//g, "-");
-      console.log(parsedorderDate,parsedDueDate)
+      console.log(parsedorderDate, parsedDueDate);
 
       logger.info(`cancelOrder blade modification for: ${diecutSn}`);
 
@@ -631,7 +640,7 @@ WHERE DIECUT_SN = :diecut_sn
         ORDER_ORG_ID: ORG_ID,
         ORDER_USER_ID: EMP_ID,
       });
-      console.log('save modi',updateModiQuery, {
+      console.log("save modi", updateModiQuery, {
         diecut_sn: diecutSn,
         orderDate: parsedorderDate,
         ORDER_ORG_ID: ORG_ID,
@@ -647,23 +656,22 @@ JOB_ID = :jobId,
       REVISION = :REVISION
 WHERE DIECUT_SN = :diecut_sn
 `;
-console.log(updateSNQuery, {
+      console.log(updateSNQuery, {
         diecut_sn: diecutSn,
         dueDate: parsedDueDate,
         orderDate: parsedorderDate,
         jobId: jobId,
-        prodId:prodId,
-        REVISION:REVISION
+        prodId: prodId,
+        REVISION: REVISION,
       });
       const resSN = await executeQuery(updateSNQuery, {
         diecut_sn: diecutSn,
         dueDate: parsedDueDate,
         orderDate: parsedorderDate,
         jobId: jobId,
-        prodId:prodId,
-        REVISION:REVISION
+        prodId: prodId,
+        REVISION: REVISION,
       });
-      
 
       return {
         success: true,
@@ -1208,6 +1216,99 @@ ORDER BY
     }
   }
 
+  static async checkLocation(diecutSN) {
+    try {
+      logger.info(` SN entries for diecut ID: ${diecutSN}`);
+      // console.log(diecutId);
+
+      const checkSNQuery = `
+        SELECT COUNT(*)  as count
+FROM KPDBA.tl_stock_detail sd 
+JOIN LOCATION_TL lt ON lt.LOC_ID = sd.LOC_ID 
+WHERE sd.DIECUT_SN = :s_diecut_sn
+      `;
+
+      const checkResult = await executeQuery(checkSNQuery, {
+        s_diecut_sn: diecutSN,
+      });
+      // console.log(checkResult.rows)
+
+      return checkResult.rows[0].COUNT;
+    } catch (error) {
+      logger.error("Error in DiecutService.saveDiecutSNList:", error);
+      throw error;
+    }
+  }
+
+ static async insertLocation(diecutSN, ORG_ID, EMP_ID) {
+  try {
+    logger.info(`Inserting location for diecut SN: ${diecutSN}`);
+
+    // Get the next TRAN_ID by finding the max and adding 1
+    const checkIDQuery = `
+      SELECT MAX(CAST(TRAN_ID AS INT)) + 1 AS maxTranId
+      FROM KPDBA.tl_stock_detail
+    `;
+
+    const IDResult = await executeQuery(checkIDQuery);
+    const nextTranId = IDResult.rows[0]?.MAXTRANID;
+    
+    
+    console.log(IDResult.rows[0].MAXTRANID)
+    // Insert the location transaction
+    const insertQuery = `
+      INSERT INTO KPDBA.TL_STOCK_DETAIL (
+        TRAN_ID, TRAN_SEQ, TRAN_TYPE, TRAN_DATE, 
+        DIECUT_SN, QTY, COMP_ID, WAREHOUSE_ID, 
+        LOC_ID, EMP_ID, STATUS, REMARK, 
+        CR_DATE, CR_ORG_ID, CR_USER_ID
+      )  VALUES (
+        '${nextTranId.toString()}', ${1}, ${1}, SYSDATE,
+        '${diecutSN}', ${1}, '${'001'}', '${'R'}',
+        '${'RAP0003'}', '${EMP_ID}', '${'T'}', '${'รับเข้าคลังหลังการลงทะเบียน'}',
+        SYSDATE, '${ORG_ID}', '${EMP_ID}'
+      )
+    `;
+
+    // Set default values for required fields
+     const params = [
+      nextTranId.toString(),  // TRAN_ID (as string)
+      1,                      // TRAN_SEQ
+      1,                      // TRAN_TYPE
+      // TRAN_DATE is SYSDATE in the SQL
+      diecutSN,               // DIECUT_SN
+      1,                      // QTY
+      '001',                  // COMP_ID
+      'R',                    // WAREHOUSE_ID
+      'RAP0003',              // LOC_ID
+      EMP_ID,                 // EMP_ID
+      'T',                    // STATUS
+      'รับเข้าคลังหลังการลงทะเบียน', // REMARK
+      // CR_DATE is SYSDATE in the SQL
+      ORG_ID,                 // CR_ORG_ID
+      EMP_ID                  // CR_USER_ID
+    ];
+    console.log(insertQuery)
+    const insertResult = await executeQuery(insertQuery);
+    
+    // After inserting the transaction, update the current location in the diecut master table
+
+    return {
+      success: true,
+      message: 'Location inserted successfully',
+      data: {
+        tranId: nextTranId.toString(),
+        diecutSn: diecutSN,
+        warehouseId: 'TOOL',
+        locId: 'DFT'
+      }
+    };
+  } catch (error) {
+    logger.error("Error in DiecutService.insertLocation:", error);
+    throw error;
+  }
+}
+
   static async getBladeChangeCount(diecutId, diecutSN) {
     try {
       logger.info(` SN entries for diecut ID: ${diecutId}`);
@@ -1236,7 +1337,7 @@ ORDER BY
     }
   }
 
-  static async getJobOrderList(diecutId,DIECUT_TYPE) {
+  static async getJobOrderList(diecutId, DIECUT_TYPE) {
     try {
       logger.info(` SN entries for diecut ID: ${diecutId}`);
       // console.log(diecutId);
@@ -1303,38 +1404,40 @@ ORDER BY DATE_USING ASC
       `;
       const checkResult = await executeQuery(checkSNQuery, {
         diecutId: diecutId,
-        DIECUT_TYPE: DIECUT_TYPE
+        DIECUT_TYPE: DIECUT_TYPE,
       });
 
-      if(checkResult.rows.length == 0) {
+      if (checkResult.rows.length == 0) {
         return [];
       }
       // console.log(checkSNQuery)
-      const jobIds = checkResult.rows.map(row => row.JOB_ID);
-    
+      const jobIds = checkResult.rows.map((row) => row.JOB_ID);
+
       // Modify the job details query to get ALL jobs, not just the first one
       const jobsql = `
         SELECT jb.job_id, jb.job_desc, jd.prod_id, jd.revision, pd.prod_desc 
         FROM kpdba.job jb 
         JOIN kpdba.job_detail jd ON jb.job_id = jd.job_id
         JOIN kpdba.product pd ON jd.prod_id = pd.prod_id AND jd.revision = pd.revision
-        WHERE jb.status = 'O' AND jd.job_id IN (${jobIds.map(id => `'${id}'`).join(',')})
+        WHERE jb.status = 'O' AND jd.job_id IN (${jobIds
+          .map((id) => `'${id}'`)
+          .join(",")})
       `;
-      
+
       // Use parameterized query to prevent SQL injection
       // const jobres = await executeQuery(jobsql, { jobIds: jobIds });
       const jobres = await executeQuery(jobsql);
-      
+
       // Combine the data
-      const combinedLog = checkResult.rows.map(item1 => ({
+      const combinedLog = checkResult.rows.map((item1) => ({
         ...item1,
-        ...(jobres.rows.find(item2 => item2.JOB_ID === item1.JOB_ID) || {})
+        ...(jobres.rows.find((item2) => item2.JOB_ID === item1.JOB_ID) || {}),
       }));
-      
+
       // Return just the array instead of wrapping it in an object
-   
+
       return {
-        combinedLog
+        combinedLog,
       };
     } catch (error) {
       logger.error("Error in DiecutService.saveDiecutSNList:", error);
@@ -1527,26 +1630,26 @@ FROM KPDBA.PTC_TYPE_MASTER
             topic_text = :posId2
           )
       `;
-  
+
       // Oracle named parameters
       const params = {
         posId: posId,
         empId: empId,
-        posId2: posId // Using different parameter name to avoid confusion
+        posId2: posId, // Using different parameter name to avoid confusion
       };
-  
+
       const checkResult = await executeQuery(checkQuery, params);
-      console.log(checkQuery, params)
-      console.log(checkResult)
+      console.log(checkQuery, params);
+      console.log(checkResult);
       // If no role is found, return View as default
       if (!checkResult || checkResult.rows.length === 0) {
         return {
-          checkResult: [{ role: 'VIEW' }]
+          checkResult: [{ role: "VIEW" }],
         };
       }
-  
+
       return {
-        checkResult
+        checkResult,
       };
     } catch (error) {
       logger.error("Error in DiecutService.getUserRole:", error);

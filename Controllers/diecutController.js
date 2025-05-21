@@ -227,6 +227,64 @@ exports.saveDiecutSN = async (req, res, next) => {
   }
 }
 
+exports.checkLocation = async (req, res, next) => {
+  try {
+    // Validate request body
+    const { diecutSN } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    // console.log(ORG_ID, EMP_ID)
+    
+
+    // Log request for debugging
+    logger.info(`Saving diecut SN list for: count`);
+    
+    // Call service function to handle database operations
+    const result = await DiecutStatus.checkLocation(diecutSN);
+    
+    console.log(result)
+    let status
+    if(result > 0){
+      status = false
+    }else{
+      status = true
+    }
+    // Return success response
+    res.status(200).json(status);
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
+exports.insertLocation = async (req, res, next) => {
+  try {
+    // Validate request body
+    const { diecutSN } = req.body;
+    const { ORG_ID, EMP_ID } = req.user;
+    // console.log(ORG_ID, EMP_ID)
+    
+
+    // Log request for debugging
+    logger.info(`Saving diecut SN list for: count`);
+    
+    // Call service function to handle database operations
+    const result = await DiecutStatus.insertLocation(diecutSN, ORG_ID, EMP_ID);
+    
+    console.log(result)
+    let status
+    if(result > 0){
+      status = false
+    }else{
+      status = true
+    }
+    // Return success response
+    res.status(200).json(status);
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
 exports.getDiecutSN = async (req, res, next) => {
   try {
     // Validate request body
