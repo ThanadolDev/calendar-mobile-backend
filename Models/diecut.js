@@ -268,7 +268,7 @@ class DiecutSN {
     }
   }
 
-  static async saveBlade(bladeData) {
+  static async saveBlade(bladeData, ORG_ID, EMP_ID) {
     try {
       const {
         diecutId,
@@ -281,6 +281,7 @@ class DiecutSN {
         multiBladeRemark,
         probDesc,
         remark,
+        status,
       } = bladeData;
 
       const formattedStartTime = startTime ? startTime.split("T")[0] : null;
@@ -325,13 +326,23 @@ class DiecutSN {
             DIECUT_SN,
             DIECUT_AGE,
             DIECUT_TYPE,
-            STATUS
+            STATUS,
+            LAST_MODIFY,
+            UP_DATE, 
+            UP_ORG_ID,
+            UP_USER_ID, 
+            UP_DESC
           ) VALUES (
             :diecut_id,
             :diecut_sn,
             :diecut_age,
             :diecut_type,
-            'N'
+            'N',
+            SYSDATE,
+            SYSDATE,
+            :ORG_ID,
+            :EMP_ID,
+            'Update from web Tooling management'
           )
         `;
 
@@ -340,18 +351,23 @@ class DiecutSN {
           diecut_sn: diecutSN,
           diecut_age: diecutAge || 0,
           diecut_type: diecutType,
+          ORG_ID: ORG_ID,
+          EMP_ID: EMP_ID,
         });
       } else {
         // If SN exists, update it
         const updateSNQuery = `
           UPDATE KPDBA.DIECUT_SN
-          SET DIECUT_AGE = :diecut_age
+          SET DIECUT_AGE = :diecut_age,
+          STATUS = :status,
+          LAST_MODIFY = SYSDATE
           WHERE DIECUT_SN = :diecut_sn
         `;
 
         await executeQuery(updateSNQuery, {
           diecut_age: diecutAge || 0,
           diecut_sn: diecutSN,
+          status: status,
         });
       }
 
@@ -375,11 +391,8 @@ class DiecutSN {
           SET 
             START_TIME = TO_DATE(:start_time, 'YYYY-MM-DD'),
             END_TIME = ${endTime ? "TO_DATE(:end_time, 'YYYY-MM-DD')" : "NULL"},
-            BLADE_TYPE = :blade_type,
-            MULTI_BLADE_REASON = :multi_blade_reason,
-            MULTI_BLADE_REMARK = :multi_blade_remark,
-            PROB_DESC = :prob_desc,
-            REMARK = :remark
+            REMARK = :remark,
+            MODIFY_TYPE = :status
           WHERE DIECUT_SN = :diecut_sn
         `;
       } else {
@@ -388,20 +401,20 @@ class DiecutSN {
             DIECUT_SN, 
             START_TIME, 
             END_TIME, 
-            BLADE_TYPE, 
-            MULTI_BLADE_REASON, 
-            MULTI_BLADE_REMARK, 
-            PROB_DESC, 
-            REMARK
+            REMARK,
+            MODIFY_TYPE,
+            ORDER_DATE,
+            ORDER_ORG_ID,
+            ORDER_USER_ID
           ) VALUES (
             :diecut_sn,
             TO_DATE(:start_time, 'YYYY-MM-DD'),
             ${endTime ? "TO_DATE(:end_time, 'YYYY-MM-DD')" : "NULL"},
-            :blade_type,
-            :multi_blade_reason,
-            :multi_blade_remark,
-            :prob_desc,
-            :remark
+            :remark,
+            :status,
+            SYSDATE,
+            :ORG_ID, 
+            :EMP_ID
           )
         `;
       }
@@ -410,12 +423,13 @@ class DiecutSN {
         diecut_sn: diecutSN,
         start_time: formattedStartTime || "1900-01-02",
         ...(endTime && { end_time: formattedEndTime }),
-        blade_type: bladeType || "N",
-        multi_blade_reason: multiBladeReason || "",
-        multi_blade_remark: multiBladeRemark || "",
-        prob_desc: probDesc || "",
-        remark: remark || "",
+        remark: remark,
+        status: status,
+        EMP_ID: EMP_ID,
+        ORG_ID: ORG_ID,
       };
+
+      console.log(modifyQuery, modifyParams);
 
       const modifyResult = await executeQuery(modifyQuery, modifyParams);
 
@@ -459,6 +473,7 @@ class DiecutSN {
       throw error;
     }
   }
+
   static async cancelOrder(bladeData) {
     try {
       const { diecutId, diecutSN, ORG_ID, EMP_ID } = bladeData;
@@ -470,7 +485,8 @@ class DiecutSN {
   SET CANCEL_FLAG = 'T',
       CANCEL_DATE = SYSDATE,
       CANCEL_ORG_ID = :orgId,
-      CANCEL_USER_ID = :userId
+      CANCEL_USER_ID = :userId,
+      MODIFY_TYPE = 'F'
   WHERE DIECUT_SN = :diecut_sn
 `;
 
@@ -483,8 +499,9 @@ class DiecutSN {
       // Then update DIECUT_SN table
       const updateSNQuery = `
   UPDATE KPDBA.DIECUT_SN
-  SET STATUS = 'T',
-      DUE_DATE = NULL
+  SET STATUS = 'F',
+      DUE_DATE = NULL,
+      LAST_MODIFY = SYSDATE
   WHERE DIECUT_SN = :diecut_sn
 `;
 
@@ -628,38 +645,85 @@ WHERE DIECUT_SN = :diecut_sn
       // Then update DIECUT_SN table
       const updateModiQuery = `
 UPDATE KPDBA.DIECUT_MODIFY
-SET ORDER_DATE = TO_DATE(:orderDate || ' 12:00:00', 'DD-MM-YYYY HH24:MI:SS'),
+SET ORDER_DATE = TO_DATE(:orderDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
     ORDER_ORG_ID = :ORDER_ORG_ID,
-    ORDER_USER_ID = :ORDER_USER_ID
+    ORDER_USER_ID = :ORDER_USER_ID,
+        UP_DATE = SYSDATE,
+      UP_ORG_ID = :ORG_ID,
+      UP_USER_ID = :EMP_ID
 WHERE DIECUT_SN = :diecut_sn
 `;
-
-      const resModi = await executeQuery(updateModiQuery, {
-        diecut_sn: diecutSn,
-        orderDate: parsedorderDate,
-        ORDER_ORG_ID: ORG_ID,
-        ORDER_USER_ID: EMP_ID,
-      });
       console.log("save modi", updateModiQuery, {
         diecut_sn: diecutSn,
         orderDate: parsedorderDate,
         ORDER_ORG_ID: ORG_ID,
         ORDER_USER_ID: EMP_ID,
+        ORG_ID: ORG_ID,
+        EMP_ID: EMP_ID,
       });
+      const resModi = await executeQuery(updateModiQuery, {
+        diecut_sn: diecutSn,
+        orderDate: parsedorderDate,
+        ORDER_ORG_ID: ORG_ID,
+        ORDER_USER_ID: EMP_ID,
+        ORG_ID: ORG_ID,
+        EMP_ID: EMP_ID,
+      });
+
+      if (resModi.rowsAffected === 0) {
+        const insertModiQuery = `
+INSERT INTO KPDBA.DIECUT_MODIFY (
+  DIECUT_SN,
+  START_TIME,
+  ORDER_DATE,
+  ORDER_ORG_ID,
+  ORDER_USER_ID,
+  CR_DATE,
+  CR_ORG_ID,
+  CR_USER_ID
+) VALUES (
+  :diecut_sn,
+  TO_DATE('01-01-1900 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
+  TO_DATE(:orderDateWithTime, 'DD-MM-YYYY HH24:MI:SS'),
+  :ORDER_ORG_ID,
+  :ORDER_USER_ID,
+  SYSDATE,
+  :ORG_ID,
+  :EMP_ID
+)
+`;
+        console.log(insertModiQuery, {
+          diecut_sn: diecutSn,
+          orderDateWithTime: parsedorderDate + " 00:00:00",
+          ORDER_ORG_ID: ORG_ID,
+          ORDER_USER_ID: EMP_ID,
+          ORG_ID: ORG_ID,
+          EMP_ID: EMP_ID,
+        });
+        await executeQuery(insertModiQuery, {
+          diecut_sn: diecutSn,
+          orderDateWithTime: parsedorderDate,
+          ORDER_ORG_ID: ORG_ID,
+          ORDER_USER_ID: EMP_ID,
+          ORG_ID: ORG_ID,
+          EMP_ID: EMP_ID,
+        });
+      }
 
       const updateSNQuery = `
 UPDATE KPDBA.DIECUT_SN
-SET DUE_DATE = TO_DATE(:dueDate || ' 12:00:00', 'DD-MM-YYYY HH24:MI:SS'),
-ORDER_DATE = TO_DATE(:orderDate || ' 12:00:00', 'DD-MM-YYYY HH24:MI:SS'),
+SET DUE_DATE = TO_DATE(:dueDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
 JOB_ID = :jobId,
       PROD_ID = :prodId,
-      REVISION = :REVISION
+      REVISION = :REVISION,
+      UP_DATE = SYSDATE,
+      UP_ORG_ID = :ORG_ID,
+      UP_USER_ID = :EMP_ID
 WHERE DIECUT_SN = :diecut_sn
 `;
       console.log(updateSNQuery, {
         diecut_sn: diecutSn,
         dueDate: parsedDueDate,
-        orderDate: parsedorderDate,
         jobId: jobId,
         prodId: prodId,
         REVISION: REVISION,
@@ -667,10 +731,11 @@ WHERE DIECUT_SN = :diecut_sn
       const resSN = await executeQuery(updateSNQuery, {
         diecut_sn: diecutSn,
         dueDate: parsedDueDate,
-        orderDate: parsedorderDate,
         jobId: jobId,
         prodId: prodId,
         REVISION: REVISION,
+        EMP_ID: EMP_ID,
+        ORG_ID: ORG_ID,
       });
 
       return {
@@ -684,14 +749,28 @@ WHERE DIECUT_SN = :diecut_sn
 
   static async saveTypeChange(bladeData) {
     try {
-      const { diecutId, diecutSN, modifyTypeAppvFlag, ORG_ID, EMP_ID } =
-        bladeData;
+      const {
+        diecutId,
+        diecutSN,
+        modifyTypeAppvFlag,
+        ORG_ID,
+        EMP_ID,
+        changeReason,
+        modifyTypeBefore,
+        modifyType,
+      } = bladeData;
 
       logger.info(`Saving blade modification for: ${diecutSN}`);
 
       const updateSNQuery = `
         UPDATE KPDBA.DIECUT_MODIFY
-        SET MODIFY_TYPE_APPV_FLAG = :modifyTypeAppvFlag
+        SET MODIFY_TYPE_APPV_FLAG = :modifyTypeAppvFlag,
+        MODIFY_TYPE_REQ_REMARK = :MODIFY_TYPE_REQ_REMARK,
+        MODIFY_TYPE_REQ_FROM = :modifyTypeBefore,
+        MODIFY_TYPE_REQ_TO= :modifyType,
+        MODIFY_TYPE_REQ_DATE = SYSDATE,
+        MODIFY_TYPE_REQ_OID = :ORG_ID,
+        MODIFY_TYPE_REQ_UID = :EMP_ID
         WHERE DIECUT_SN = :diecut_sn
       `;
       console.log(updateSNQuery);
@@ -699,6 +778,11 @@ WHERE DIECUT_SN = :diecut_sn
       await executeQuery(updateSNQuery, {
         diecut_sn: diecutSN,
         modifyTypeAppvFlag: modifyTypeAppvFlag,
+        MODIFY_TYPE_REQ_REMARK: changeReason,
+        modifyTypeBefore: modifyTypeBefore,
+        modifyType: modifyType,
+        ORG_ID: ORG_ID,
+        EMP_ID: EMP_ID,
       });
 
       return {
@@ -754,29 +838,50 @@ WHERE DIECUT_SN = :diecut_sn
     try {
       const { diecutId, diecutSN } = bladeData;
 
-      logger.info(`Saving blade modification for: ${diecutSN}`);
+      logger.info(`Canceling type change for: ${diecutSN}`);
 
       const updateSNQuery = `
-        UPDATE KPDBA.DIECUT_MODIFY
-        SET MODIFY_TYPE_APPV_FLAG = NULL
-        WHERE DIECUT_SN = :diecut_sn
-      `;
-      // console.log(updateSNQuery)
+      UPDATE KPDBA.DIECUT_MODIFY
+      SET MODIFY_TYPE_APPV_FLAG = NULL,
+      WHERE DIECUT_SN = :diecut_sn
+    `;
 
       await executeQuery(updateSNQuery, {
         diecut_sn: diecutSN,
       });
 
+      const selectedQuery = `
+      SELECT MODIFY_TYPE FROM KPDBA.DIECUT_MODIFY
+      WHERE DIECUT_SN = :diecut_sn
+    `;
+
+      const typedata = await executeQuery(selectedQuery, {
+        diecut_sn: diecutSN,
+      });
+
+      console.log("Query result for", diecutSN, ":", typedata);
+
+      // Safe handling of potentially null/undefined typedata
+      let originalType = null;
+
+      if (typedata && typedata.rows && typedata.rows.length > 0) {
+        originalType = typedata.rows[0].MODIFY_TYPE || null;
+      }
+
       return {
         success: true,
-        message: "Blade data updated",
+        message: "Type change cancelled successfully",
+        data: {
+          originalType: originalType,
+          diecutSN: diecutSN,
+          diecutId: diecutId,
+        },
       };
     } catch (error) {
-      logger.error("Error in DiecutService.saveBlade:", error);
+      logger.error("Error in DiecutService.cancelTypeChange:", error);
       throw error;
     }
   }
-
   static async verifyApproverPOS(bladeData) {
     try {
       const { requiredPositionId } = bladeData;
@@ -1240,23 +1345,22 @@ WHERE sd.DIECUT_SN = :s_diecut_sn
     }
   }
 
- static async insertLocation(diecutSN, ORG_ID, EMP_ID) {
-  try {
-    logger.info(`Inserting location for diecut SN: ${diecutSN}`);
+  static async insertLocation(diecutSN, ORG_ID, EMP_ID) {
+    try {
+      logger.info(`Inserting location for diecut SN: ${diecutSN}`);
 
-    // Get the next TRAN_ID by finding the max and adding 1
-    const checkIDQuery = `
+      // Get the next TRAN_ID by finding the max and adding 1
+      const checkIDQuery = `
       SELECT MAX(CAST(TRAN_ID AS INT)) + 1 AS maxTranId
       FROM KPDBA.tl_stock_detail
     `;
 
-    const IDResult = await executeQuery(checkIDQuery);
-    const nextTranId = IDResult.rows[0]?.MAXTRANID;
-    
-    
-    console.log(IDResult.rows[0].MAXTRANID)
-    // Insert the location transaction
-    const insertQuery = `
+      const IDResult = await executeQuery(checkIDQuery);
+      const nextTranId = IDResult.rows[0]?.MAXTRANID;
+
+      console.log(IDResult.rows[0].MAXTRANID);
+      // Insert the location transaction
+      const insertQuery = `
       INSERT INTO KPDBA.TL_STOCK_DETAIL (
         TRAN_ID, TRAN_SEQ, TRAN_TYPE, TRAN_DATE, 
         DIECUT_SN, QTY, COMP_ID, WAREHOUSE_ID, 
@@ -1264,50 +1368,50 @@ WHERE sd.DIECUT_SN = :s_diecut_sn
         CR_DATE, CR_ORG_ID, CR_USER_ID
       )  VALUES (
         '${nextTranId.toString()}', ${1}, ${1}, SYSDATE,
-        '${diecutSN}', ${1}, '${'001'}', '${'R'}',
-        '${'RAP0003'}', '${EMP_ID}', '${'T'}', '${'รับเข้าคลังหลังการลงทะเบียน'}',
+        '${diecutSN}', ${1}, '${"001"}', '${"R"}',
+        '${"RAP0003"}', '${EMP_ID}', '${"T"}', '${"รับเข้าคลังหลังการลงทะเบียน"}',
         SYSDATE, '${ORG_ID}', '${EMP_ID}'
       )
     `;
 
-    // Set default values for required fields
-     const params = [
-      nextTranId.toString(),  // TRAN_ID (as string)
-      1,                      // TRAN_SEQ
-      1,                      // TRAN_TYPE
-      // TRAN_DATE is SYSDATE in the SQL
-      diecutSN,               // DIECUT_SN
-      1,                      // QTY
-      '001',                  // COMP_ID
-      'R',                    // WAREHOUSE_ID
-      'RAP0003',              // LOC_ID
-      EMP_ID,                 // EMP_ID
-      'T',                    // STATUS
-      'รับเข้าคลังหลังการลงทะเบียน', // REMARK
-      // CR_DATE is SYSDATE in the SQL
-      ORG_ID,                 // CR_ORG_ID
-      EMP_ID                  // CR_USER_ID
-    ];
-    console.log(insertQuery)
-    const insertResult = await executeQuery(insertQuery);
-    
-    // After inserting the transaction, update the current location in the diecut master table
+      // Set default values for required fields
+      const params = [
+        nextTranId.toString(), // TRAN_ID (as string)
+        1, // TRAN_SEQ
+        1, // TRAN_TYPE
+        // TRAN_DATE is SYSDATE in the SQL
+        diecutSN, // DIECUT_SN
+        1, // QTY
+        "001", // COMP_ID
+        "R", // WAREHOUSE_ID
+        "RAP0003", // LOC_ID
+        EMP_ID, // EMP_ID
+        "T", // STATUS
+        "รับเข้าคลังหลังการลงทะเบียน", // REMARK
+        // CR_DATE is SYSDATE in the SQL
+        ORG_ID, // CR_ORG_ID
+        EMP_ID, // CR_USER_ID
+      ];
+      console.log(insertQuery);
+      const insertResult = await executeQuery(insertQuery);
 
-    return {
-      success: true,
-      message: 'Location inserted successfully',
-      data: {
-        tranId: nextTranId.toString(),
-        diecutSn: diecutSN,
-        warehouseId: 'TOOL',
-        locId: 'DFT'
-      }
-    };
-  } catch (error) {
-    logger.error("Error in DiecutService.insertLocation:", error);
-    throw error;
+      // After inserting the transaction, update the current location in the diecut master table
+
+      return {
+        success: true,
+        message: "Location inserted successfully",
+        data: {
+          tranId: nextTranId.toString(),
+          diecutSn: diecutSN,
+          warehouseId: "TOOL",
+          locId: "DFT",
+        },
+      };
+    } catch (error) {
+      logger.error("Error in DiecutService.insertLocation:", error);
+      throw error;
+    }
   }
-}
 
   static async getBladeChangeCount(diecutId, diecutSN) {
     try {
@@ -1494,49 +1598,67 @@ ORDER BY DATE_USING ASC
   static async getDiecutSNDetail(diecutId, diecutSN) {
     try {
       logger.info(` SN entries for diecut ID: ${diecutId}`);
-      // console.log(diecutId);
 
       const checkSNQuery = `
-                
-        SELECT 
-    DS.DIECUT_ID,
-    DS.DIECUT_SN,
-    DS.DIECUT_AGE,
-    DS.STATUS,
-    DM.START_TIME,
-    DM.END_TIME,
-    DM.BLADE_TYPE,
-    DM.MULTI_BLADE_REASON,
-    DM.MULTI_BLADE_REMARK,
-    DM.PROB_DESC,
-    DM.REMARK,
-       DM.MODIFY_TYPE,
-    DM.MODIFY_TYPE_REQ_TO,
-    DM.MODIFY_TYPE_APPV_FLAG,
-    DM.CR_DATE
-FROM 
-    KPDBA.DIECUT_SN DS
-LEFT JOIN 
-    KPDBA.DIECUT_MODIFY DM ON DS.DIECUT_SN = DM.DIECUT_SN
-WHERE 
-    DS.DIECUT_ID = :s_diecut_id
-AND DS.DIECUT_SN = :s_diecut_sn
-ORDER BY 
-    DS.DIECUT_SN ASC
-
-      `;
+      SELECT 
+        DS.DIECUT_ID,
+        DS.DIECUT_SN,
+        DS.DIECUT_AGE,
+        DS.STATUS,
+        DS.DIECUT_TYPE,
+        DS.LAST_MODIFY,
+        CASE 
+            WHEN DM.START_TIME IS NOT NULL THEN 
+                DM.START_TIME + INTERVAL '7' HOUR
+            ELSE NULL 
+        END AS START_TIME,
+        CASE 
+            WHEN DM.END_TIME IS NOT NULL THEN 
+                DM.END_TIME + INTERVAL '7' HOUR
+            ELSE NULL 
+        END AS END_TIME,
+        CASE 
+            WHEN DM.BLADE_TYPE = 'M' THEN 'มีดคู่'
+            WHEN DM.BLADE_TYPE = 'S' THEN 'มีดเดี่ยว'
+            ELSE DM.BLADE_TYPE
+        END AS BLADE_TYPE,
+        COALESCE(MMBR.MBR_DESC, DM.MULTI_BLADE_REASON) AS MULTI_BLADE_REASON,
+        DM.MULTI_BLADE_REMARK,
+        DM.PROB_DESC,
+        DM.REMARK,
+        DM.MODIFY_TYPE,
+        DM.MODIFY_TYPE_REQ_TO,
+        DM.MODIFY_TYPE_APPV_FLAG,
+        CASE 
+            WHEN DM.CR_DATE IS NOT NULL THEN 
+                DM.CR_DATE + INTERVAL '7' HOUR
+            ELSE NULL 
+        END AS CR_DATE,
+        DM.MODIFY_TYPE_REQ_REMARK,
+        DM.MODIFY_TYPE_REQ_FROM
+      FROM 
+        KPDBA.DIECUT_SN DS
+      LEFT JOIN 
+        KPDBA.DIECUT_MODIFY DM ON DS.DIECUT_SN = DM.DIECUT_SN
+      LEFT JOIN 
+        KPDBA.MASTER_MULTI_BLADE_REASON MMBR ON DM.MULTI_BLADE_REASON = MMBR.MBR_ID
+      WHERE 
+        DS.DIECUT_ID = :s_diecut_id
+      AND DS.DIECUT_SN = :s_diecut_sn
+      ORDER BY 
+        DS.DIECUT_SN DESC
+    `;
 
       const checkResult = await executeQuery(checkSNQuery, {
         s_diecut_id: diecutId,
         s_diecut_sn: diecutSN,
       });
-      // console.log(checkResult.rows)
 
       return {
         checkResult,
       };
     } catch (error) {
-      logger.error("Error in DiecutService.saveDiecutSNList:", error);
+      logger.error("Error in DiecutService.getDiecutSNDetail:", error);
       throw error;
     }
   }
@@ -1552,6 +1674,56 @@ FROM KPDBA.PTC_TYPE_MASTER
 
       const checkResult = await executeQuery(checkSNQuery);
       // console.log(checkResult.rows)
+
+      return {
+        checkResult,
+      };
+    } catch (error) {
+      logger.error("Error in DiecutService.saveDiecutSNList:", error);
+      throw error;
+    }
+  }
+
+  static async getDiecutInfos() {
+    try {
+      const checkSNQuery = `
+         select TOPIC_TEXT from kpdba.profile where topic_name ='PROGRAM_INFO'
+      `;
+
+      const checkResult = await executeQuery(checkSNQuery);
+      // console.log(checkResult.rows)
+
+      return checkResult;
+    } catch (error) {
+      logger.error("Error in DiecutService.saveDiecutSNList:", error);
+      throw error;
+    }
+  }
+
+  static async refreshStore() {
+  try {
+    const checkSNQuery = `CALL KPDBA.PACK_TOOLING.SP_CALC_PLANING_DATE(SYSDATE)`;
+    
+    const checkResult = await executeQuery(checkSNQuery);
+    
+    return checkResult;
+  } catch (error) {
+    logger.error("Error in DiecutService.getDiecutInfos:", error);
+    throw error;
+  }
+}
+
+  static async getDiecutAllowedtypes() {
+    try {
+      const checkSNQuery = `
+      
+
+SELECT p.TOPIC_TEXT FROM KPDBA.PROFILE p WHERE p.TOPIC_NAME = 'DIECUT_CHG_MOD_TYPE_LIST'
+
+      `;
+
+      const checkResult = await executeQuery(checkSNQuery);
+      console.log(checkResult.rows);
 
       return {
         checkResult,
@@ -1614,12 +1786,20 @@ FROM KPDBA.PTC_TYPE_MASTER
             topic_text = :posId
           )
         UNION
-        SELECT 'DIECUT_STAMPING_MANAGER_UID' AS role
+        SELECT 'DIECUT_STAMPING_MANAGER_POS' AS role
         FROM KPDBA.profile
         WHERE topic_name = 'DIECUT_STAMPING_MANAGER_UID'
           AND (
             ',' || topic_text || ',' LIKE '%,' || :empId || ',%' OR 
             topic_text = :empId
+          )
+        UNION
+        SELECT 'DIECUT_CHG_MOD_TYPE_APPV_POS' AS role
+        FROM KPDBA.profile
+        WHERE topic_name = 'DIECUT_CHG_MOD_TYPE_APPV_POS'
+          AND (
+            ',' || topic_text || ',' LIKE '%,' || :empId || ',%' OR 
+            topic_text = :posId
           )
         UNION
         SELECT 'DIECUT_PLANNING_POS' AS role
@@ -1640,16 +1820,16 @@ FROM KPDBA.PTC_TYPE_MASTER
 
       const checkResult = await executeQuery(checkQuery, params);
       console.log(checkQuery, params);
-      console.log(checkResult);
+      console.log(checkResult.rows[0].ROLE);
       // If no role is found, return View as default
-      if (!checkResult || checkResult.rows.length === 0) {
+      if (checkResult && checkResult.rows.length === 0) {
         return {
-          checkResult: [{ role: "VIEW" }],
+          checkResult: [{ role: "VIEW", appvrole: false }],
         };
       }
 
       return {
-        checkResult,
+        checkResult: [{ role: checkResult.rows[0].ROLE, appvrole: true }],
       };
     } catch (error) {
       logger.error("Error in DiecutService.getUserRole:", error);

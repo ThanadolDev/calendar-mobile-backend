@@ -68,6 +68,12 @@ router.post('/orderchange', diecutController.orderChange);
 
 router.get('/types', diecutController.getDiecuttypes);
 
+router.get('/refreshstore', diecutController.refreshStore);
+
+router.get('/infos', diecutController.getDiecutInfos);
+
+router.post('/getallowedtypes', diecutController.getDiecutAllowedtypes);
+
 router.post('/openjobs', diecutController.getDiecutOpenJobs);
 
 router.post('/getuserrole', diecutController.getUserRole);

@@ -173,9 +173,9 @@ class User {
               topic_text = :empId
             )
           UNION
-          SELECT 'DIECUT_CHG_MOD_TYPE_LIST' AS role
+          SELECT 'DIECUT_CHG_MOD_TYPE_APPV_POS' AS role
           FROM KPDBA.profile
-          WHERE topic_name = 'DIECUT_CHG_MOD_TYPE_LIST'
+          WHERE topic_name = 'DIECUT_CHG_MOD_TYPE_APPV_POS'
             AND (
               ',' || topic_text || ',' LIKE '%,' || :posId || ',%' OR 
               topic_text = :posId

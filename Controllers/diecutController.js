@@ -469,7 +469,7 @@ exports.saveDiecutModiSN = async (req, res, next) => {
     // Process each item and collect results
     const results = [];
     for (const item of dataArray) {
-      const result = await DiecutSN.saveBlade(item);
+      const result = await DiecutSN.saveBlade(item,ORG_ID, EMP_ID);
       results.push({
         diecutSN: item.diecutSN,
         result: result
@@ -684,7 +684,10 @@ exports.saveTypeRequest = async (req, res, next) => {
     const { 
       diecutId, 
       diecutSN,
-      modifyTypeAppvFlag 
+      modifyTypeAppvFlag,
+      changeReason,
+      modifyTypeBefore,
+      modifyType
     } = req.body;
     const { ORG_ID, EMP_ID } = req.user;
     
@@ -697,7 +700,7 @@ exports.saveTypeRequest = async (req, res, next) => {
     const result = await DiecutSN.saveTypeChange({
       diecutId,
       diecutSN,
-      modifyTypeAppvFlag,  ORG_ID, EMP_ID
+      modifyTypeAppvFlag,  ORG_ID, EMP_ID,changeReason,modifyTypeBefore,modifyType
     });
     
     res.status(200).json(formatResponse(
@@ -714,6 +717,15 @@ exports.saveTypeRequest = async (req, res, next) => {
   }
 }
 
+const axios = require('axios');
+
+// Define approval positions mapping
+const APPROVAL_POSITIONS = {
+  'DIECUT_CHG_MOD_TYPE_APPV_POS': ['DIECUT_STAMPING_MANAGER_POS'], // Manager positions that can approve type changes
+  'DIECUT_STATUS_APPV_POS': ['DIECUT_STAMPING_MANAGER_POS'], // Manager positions that can approve status changes
+  'GENERAL_APPROVAL': ['DIECUT_STAMPING_MANAGER_POS'] // General approval positions
+};
+
 exports.verifyApprover = async (req, res, next) => {
   try {
     const { 
@@ -721,28 +733,180 @@ exports.verifyApprover = async (req, res, next) => {
       password,
       requiredPositionId 
     } = req.body;
-    const { ORG_ID, EMP_ID } = req.user;
     
     if (!username || !password) {
       return next(new ApiError('Invalid request body. Required: username and password', 400));
     }
     
-    logger.info(`Saving blade modification for: ${username}`);
+    logger.info(`Verifying approver credentials for: ${username}`);
     
-    // const result = await DiecutSN.verifyApproverPOS({
-    //   requiredPositionId
-    // });
+    // Step 1: Login to get access token
+    let loginResponse;
+    try {
+      loginResponse = await axios.post('https://api.nitisakc.dev/auth/login', {
+        usr: username,
+        pwd: password
+      });
+    } catch (authError) {
+      logger.error('Login failed:', authError.response?.data || authError.message);
+      return res.status(401).json(formatResponse(
+        false,
+        'Invalid username or password',
+        null
+      ));
+    }
+
+    // Step 2: Extract access token from login response
+    if (!loginResponse.data || !loginResponse.data.accessToken) {
+      logger.error('Invalid login response - missing access token:', loginResponse.data);
+      return res.status(401).json(formatResponse(
+        false,
+        'Authentication failed - no access token received',
+        null
+      ));
+    }
+
+    const accessToken = loginResponse.data.accessToken;
+    logger.info(`Access token obtained for user: ${username}`);
+
+    // Step 3: Verify token to get profile data
+    let verifyResponse;
+    try {
+      verifyResponse = await axios.get('https://api.nitisakc.dev/auth/verify', {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json'
+        }
+      });
+    } catch (verifyError) {
+      logger.error('Token verification failed:', verifyError.response?.data || verifyError.message);
+      return res.status(401).json(formatResponse(
+        false,
+        'Token verification failed',
+        null
+      ));
+    }
+
+    // Step 4: Extract employee and position data from verify response
+    if (!verifyResponse.data || !verifyResponse.data.profile) {
+      logger.error('Invalid verify response structure:', verifyResponse.data);
+      return res.status(401).json(formatResponse(
+        false,
+        'Verification failed - invalid response',
+        null
+      ));
+    }
+
+    const profile = verifyResponse.data.profile;
+    
+    // Handle case where profile is expected to be an array
+    const profileData = Array.isArray(profile) && profile.length > 0 ? profile[0] : profile;
+    
+    const empId = profileData.EMP_ID;
+    const posId = profileData.POS_ID;
+    const empFname = profileData.EMP_FNAME || '';
+    const empLname = profileData.EMP_LNAME || '';
+    const orgId = profileData.ORG_ID;
+    
+    if (!empId || !posId) {
+      logger.error('Missing EMP_ID or POS_ID in verify response:', profileData);
+      return res.status(401).json(formatResponse(
+        false,
+        'Verification failed - incomplete profile data',
+        null
+      ));
+    }
+
+    logger.info(`Profile verified for user: ${empId}, Position: ${posId}`);
+
+    // Step 3: Get user role using empId and posId
+    let roleResult;
+    try {
+      roleResult = await DiecutStatus.getUserRole(empId, posId);
+      logger.info('User role result:', roleResult);
+    } catch (roleError) {
+      logger.error('Error getting user role:', roleError);
+      return res.status(500).json(formatResponse(
+        false,
+        'Failed to verify user permissions',
+        null
+      ));
+    }
+
+    // Step 4: Check if user has required position/role
+    let hasRequiredPermission = false;
+    let permissionCheckDetails = {};
+    
+     permissionCheckDetails = roleResult.checkResult[0]
+
+    // if (requiredPositionId) {
+    //   // Check if the required position ID is in our approval mapping
+    //   const allowedPositions = APPROVAL_POSITIONS[requiredPositionId];
+      
+    //   if (allowedPositions) {
+    //     hasRequiredPermission = allowedPositions.includes(posId);
+    //     permissionCheckDetails = {
+    //       requiredPositionId,
+    //       userPositionId: posId,
+    //       allowedPositions,
+    //       hasPermission: hasRequiredPermission
+    //     };
+    //   } else {
+    //     // Direct position ID match
+    //     hasRequiredPermission = posId === requiredPositionId;
+    //     permissionCheckDetails = {
+    //       requiredPositionId,
+    //       userPositionId: posId,
+    //       directMatch: hasRequiredPermission
+    //     };
+    //   }
+    // } else {
+    //   // Fallback: check if user has manager-level role
+    //   if (roleResult && roleResult.data && roleResult.data.roles && roleResult.data.roles.length > 0) {
+    //     const userRole = roleResult.data.roles[0]?.ROLE;
+    //     // Check for manager positions or specific role values
+    //     hasRequiredPermission = posId === 'DIECUT_STAMPING_MANAGER_POS' || userRole === 1 || userRole === 1100;
+    //     permissionCheckDetails = {
+    //       userRole,
+    //       userPositionId: posId,
+    //       isManager: hasRequiredPermission
+    //     };
+    //   }
+    // }
+
+    // logger.info('Permission check details:', permissionCheckDetails);
+
+    // if (!hasRequiredPermission) {
+    //   logger.warn(`User ${username} (${empId}) does not have required permission:`, permissionCheckDetails);
+    //   return res.status(403).json(formatResponse(
+    //     false,
+    //     'User does not have required approval permissions for this action',
+    //     {
+    //       permissionCheckDetails
+    //     }
+    //   ));
+    // }
+
+    // Step 5: Return success with user details
+    const employeeName = `${empFname} ${empLname}`.trim();
+    logger.info(`Approver verification successful for user: ${username} (${empId}) - ${employeeName}`);
     
     res.status(200).json(formatResponse(
       true,
-      'Blade modification saved successfully',
+      'Approver verification successful',
       { 
-        username,
+        employeeId: empId,
+        employeeName: employeeName,
+        positionId: posId,
+        username: username,
+        orgId: orgId,
+        permissionCheckDetails
       }
     ));
+    
   } catch (error) {
-    logger.error('Error saving blade modification', error);
-    return next(new ApiError('Failed to save blade modification', 500));
+    logger.error('Error in verifyApprover:', error);
+    return next(new ApiError('Failed to verify approver credentials', 500));
   }
 }
 
@@ -826,6 +990,65 @@ exports.getDiecuttypes = async (req, res, next) => {
       'Diecut Type list successfully',
       { 
         diecutType: result.checkResult.rows
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
+
+exports.refreshStore = async (req, res, next) => {
+  try {
+    
+    const result = await DiecutStatus.refreshStore();
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Diecut Type list successfully',
+      { 
+        diecutType: result
+      }
+    ));
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
+
+exports.getDiecutInfos = async (req, res, next) => {
+  try {
+    
+    const result = await DiecutStatus.getDiecutInfos();
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Get Diecut infos successfully',
+      
+         result.rows[0]
+      
+    ));
+  } catch (error) {
+    logger.error('Error saving diecut SN list', error);
+    return next(new ApiError('Failed to save diecut SN list', 500));
+  }
+}
+
+exports.getDiecutAllowedtypes = async (req, res, next) => {
+  try {
+    
+    const result = await DiecutStatus.getDiecutAllowedtypes();
+    
+    // Return success response
+    res.status(200).json(formatResponse(
+      true,
+      'Diecut Type list successfully',
+      { 
+        diecutType: result.checkResult.rows[0].TOPIC_TEXT
       }
     ));
   } catch (error) {
