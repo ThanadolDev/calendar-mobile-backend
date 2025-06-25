@@ -621,131 +621,147 @@ WHERE DIECUT_SN = :diecut_sn
     }
   }
 
-  static async updateOrderInfo(bladeData) {
-    try {
-      const {
-        diecutId,
-        diecutSn,
-        orderDate,
-        ORG_ID,
-        EMP_ID,
-        jobId,
-        prodDesc,
-        prodId,
-        REVISION,
-        dueDate,
-      } = bladeData;
+static async updateOrderInfo(bladeData) {
+  try {
+    const {
+      diecutId,
+      diecutSn,
+      orderDate,
+      ORG_ID,
+      EMP_ID,
+      jobId,
+      prodDesc,
+      prodId,
+      REVISION,
+      dueDate,
+      orderDateType
+    } = bladeData;
 
-      const parsedorderDate = orderDate.split(", ")[0].replace(/\//g, "-");
-      const parsedDueDate = dueDate.split(", ")[0].replace(/\//g, "-");
-      console.log(parsedorderDate, parsedDueDate);
+    // Safe date parsing - returns null if input is null/invalid
+    const parsedOrderDate = orderDate?.split?.(", ")?.[0]?.replace?.(/\//g, "-")?.split("-").map((part, i) => i === 0 ? orderDate?.split?.(", ")?.[0]?.replace?.(/\//g, "-")?.split("-")[1] : i === 1 ? orderDate?.split?.(", ")?.[0]?.replace?.(/\//g, "-")?.split("-")[0] : part).join("-") ?? null;
+    const parsedDueDate = dueDate?.split?.(", ")?.[0]?.replace?.(/\//g, "-")?.split("-").map((part, i) => i === 0 ? dueDate?.split?.(", ")?.[0]?.replace?.(/\//g, "-")?.split("-")[1] : i === 1 ? dueDate?.split?.(", ")?.[0]?.replace?.(/\//g, "-")?.split("-")[0] : part).join("-") ?? null;
+    
+    console.log('Parsed dates:', { parsedOrderDate, parsedDueDate,orderDate,dueDate });
 
-      logger.info(`cancelOrder blade modification for: ${diecutSn}`);
+    logger.info(`Processing order info update for blade: ${diecutSn}, orderDateType: ${orderDateType}`);
 
-      // Then update DIECUT_SN table
-      const updateModiQuery = `
-UPDATE KPDBA.DIECUT_MODIFY
-SET ORDER_DATE = TO_DATE(:orderDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
-    ORDER_ORG_ID = :ORDER_ORG_ID,
-    ORDER_USER_ID = :ORDER_USER_ID,
-        UP_DATE = SYSDATE,
-      UP_ORG_ID = :ORG_ID,
-      UP_USER_ID = :EMP_ID
-WHERE DIECUT_SN = :diecut_sn
-`;
-      console.log("save modi", updateModiQuery, {
+    // Update DIECUT_MODIFY table - always update, set to NULL if no date
+    const updateModiQuery = `
+      UPDATE KPDBA.DIECUT_MODIFY
+      SET ORDER_DATE = CASE 
+                         WHEN :orderDate IS NOT NULL 
+                         THEN TO_DATE(:orderDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS')
+                         ELSE NULL 
+                       END,
+          ORDER_ORG_ID = :ORDER_ORG_ID,
+          ORDER_USER_ID = :ORDER_USER_ID,
+          ORDER_DATE_TYPE = :ORDER_DATE_TYPE,
+          UP_DATE = SYSDATE,
+          UP_ORG_ID = :ORG_ID,
+          UP_USER_ID = :EMP_ID
+      WHERE DIECUT_SN = :diecut_sn
+    `;
+
+    const updateModiParams = {
+      diecut_sn: diecutSn,
+      orderDate: parsedOrderDate, // Can be null
+      ORDER_ORG_ID: ORG_ID,
+      ORDER_USER_ID: EMP_ID,
+      ORDER_DATE_TYPE: orderDateType,
+      ORG_ID: ORG_ID,
+      EMP_ID: EMP_ID,
+    };
+
+    console.log("Updating DIECUT_MODIFY:", updateModiQuery, updateModiParams);
+    const resModi = await executeQuery(updateModiQuery, updateModiParams);
+
+    // If no rows affected, insert new record
+    if (resModi.rowsAffected === 0) {
+      const insertModiQuery = `
+        INSERT INTO KPDBA.DIECUT_MODIFY (
+          DIECUT_SN,
+          START_TIME,
+          ORDER_DATE,
+          ORDER_ORG_ID,
+          ORDER_USER_ID,
+          CR_DATE,
+          CR_ORG_ID,
+          CR_USER_ID,
+          ORDER_DATE_TYPE
+        ) VALUES (
+          :diecut_sn,
+          TO_DATE('01-01-1900 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
+          CASE 
+            WHEN :orderDate IS NOT NULL 
+            THEN TO_DATE(:orderDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS')
+            ELSE NULL 
+          END,
+          :ORDER_ORG_ID,
+          :ORDER_USER_ID,
+          SYSDATE,
+          :ORG_ID,
+          :EMP_ID,
+          :ORDER_DATE_TYPE
+        )
+      `;
+
+      const insertModiParams = {
         diecut_sn: diecutSn,
-        orderDate: parsedorderDate,
+        orderDate: parsedOrderDate, // Can be null
         ORDER_ORG_ID: ORG_ID,
         ORDER_USER_ID: EMP_ID,
         ORG_ID: ORG_ID,
         EMP_ID: EMP_ID,
-      });
-      const resModi = await executeQuery(updateModiQuery, {
-        diecut_sn: diecutSn,
-        orderDate: parsedorderDate,
-        ORDER_ORG_ID: ORG_ID,
-        ORDER_USER_ID: EMP_ID,
-        ORG_ID: ORG_ID,
-        EMP_ID: EMP_ID,
-      });
-
-      if (resModi.rowsAffected === 0) {
-        const insertModiQuery = `
-INSERT INTO KPDBA.DIECUT_MODIFY (
-  DIECUT_SN,
-  START_TIME,
-  ORDER_DATE,
-  ORDER_ORG_ID,
-  ORDER_USER_ID,
-  CR_DATE,
-  CR_ORG_ID,
-  CR_USER_ID
-) VALUES (
-  :diecut_sn,
-  TO_DATE('01-01-1900 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
-  TO_DATE(:orderDateWithTime, 'DD-MM-YYYY HH24:MI:SS'),
-  :ORDER_ORG_ID,
-  :ORDER_USER_ID,
-  SYSDATE,
-  :ORG_ID,
-  :EMP_ID
-)
-`;
-        console.log(insertModiQuery, {
-          diecut_sn: diecutSn,
-          orderDateWithTime: parsedorderDate + " 00:00:00",
-          ORDER_ORG_ID: ORG_ID,
-          ORDER_USER_ID: EMP_ID,
-          ORG_ID: ORG_ID,
-          EMP_ID: EMP_ID,
-        });
-        await executeQuery(insertModiQuery, {
-          diecut_sn: diecutSn,
-          orderDateWithTime: parsedorderDate,
-          ORDER_ORG_ID: ORG_ID,
-          ORDER_USER_ID: EMP_ID,
-          ORG_ID: ORG_ID,
-          EMP_ID: EMP_ID,
-        });
-      }
-
-      const updateSNQuery = `
-UPDATE KPDBA.DIECUT_SN
-SET DUE_DATE = TO_DATE(:dueDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS'),
-JOB_ID = :jobId,
-      PROD_ID = :prodId,
-      REVISION = :REVISION,
-      UP_DATE = SYSDATE,
-      UP_ORG_ID = :ORG_ID,
-      UP_USER_ID = :EMP_ID
-WHERE DIECUT_SN = :diecut_sn
-`;
-      console.log(updateSNQuery, {
-        diecut_sn: diecutSn,
-        dueDate: parsedDueDate,
-        jobId: jobId,
-        prodId: prodId,
-        REVISION: REVISION,
-      });
-      const resSN = await executeQuery(updateSNQuery, {
-        diecut_sn: diecutSn,
-        dueDate: parsedDueDate,
-        jobId: jobId,
-        prodId: prodId,
-        REVISION: REVISION,
-        EMP_ID: EMP_ID,
-        ORG_ID: ORG_ID,
-      });
-
-      return {
-        success: true,
+        ORDER_DATE_TYPE: orderDateType
       };
-    } catch (error) {
-      logger.error("Error in DiecutService.saveBlade:", error);
-      throw error;
+
+      console.log("Inserting into DIECUT_MODIFY:", insertModiQuery, insertModiParams);
+      await executeQuery(insertModiQuery, insertModiParams);
     }
+
+    // Update DIECUT_SN table - always update, set to NULL if no date
+    const updateSNQuery = `
+      UPDATE KPDBA.DIECUT_SN
+      SET DUE_DATE = CASE 
+                       WHEN :dueDate IS NOT NULL 
+                       THEN TO_DATE(:dueDate || ' 00:00:00', 'DD-MM-YYYY HH24:MI:SS')
+                       ELSE NULL 
+                     END,
+          JOB_ID = :jobId,
+          PROD_ID = :prodId,
+          REVISION = :REVISION,
+          UP_DATE = SYSDATE,
+          UP_ORG_ID = :ORG_ID,
+          UP_USER_ID = :EMP_ID
+      WHERE DIECUT_SN = :diecut_sn
+    `;
+
+    const updateSNParams = {
+      diecut_sn: diecutSn,
+      dueDate: parsedDueDate, // Can be null
+      jobId: jobId, // Can be null
+      prodId: prodId, // Can be null
+      REVISION: REVISION, // Can be null
+      EMP_ID: EMP_ID,
+      ORG_ID: ORG_ID,
+    };
+
+    console.log("Updating DIECUT_SN:", updateSNQuery, updateSNParams);
+    const resSN = await executeQuery(updateSNQuery, updateSNParams);
+
+    return {
+      success: true,
+      message: 'Order information updated successfully',
+      modifyRowsAffected: resModi.rowsAffected,
+      snRowsAffected: resSN.rowsAffected
+    };
+
+  } catch (error) {
+    logger.error("Error in DiecutService.updateOrderInfo:", error);
+    throw error;
   }
+}
+
 
   static async saveTypeChange(bladeData) {
     try {
@@ -1042,6 +1058,7 @@ class DiecutStatus {
         , TL.BLANK_SIZE_X, TL.BLANK_SIZE_Y
         , DSN.JOB_ID, DSN.PROD_ID, DSN.REVISION
         , JB.JOB_DESC, PD.PROD_DESC , DM.ORDER_DATE
+        , DM.ORDER_ICON, DSN.DUE_ICON
 FROM (
     SELECT SN.DIECUT_ID, SN.DIECUT_SN, NVL(SN.DIECUT_AGE,0) AGES
         , CASE 
@@ -1056,7 +1073,7 @@ FROM (
             ELSE NVL(SN.DIECUT_AGE,0) - NVL(UD.USED,0) 
           END REMAIN  
         , SN.STATUS, SN.TL_STATUS, SN.LAST_MODIFY, SN.DUE_DATE
-        , SN.DIECUT_TYPE, SN.JOB_ID, SN.PROD_ID, SN.REVISION
+        , SN.DIECUT_TYPE, SN.JOB_ID, SN.PROD_ID, SN.REVISION , sn.DUE_ICON
     FROM KPDBA.DIECUT_SN SN
     LEFT OUTER JOIN  (
         SELECT WD.DIECUT_SN, SUM(WD.COUNTER_QTY ) USED
@@ -1441,7 +1458,7 @@ WHERE sd.DIECUT_SN = :s_diecut_sn
     }
   }
 
-  static async getJobOrderList(diecutId, DIECUT_TYPE) {
+  static async getJobOrderList(diecutId, DIECUT_TYPE,DIECUT_SN) {
     try {
       logger.info(` SN entries for diecut ID: ${diecutId}`);
       // console.log(diecutId);
@@ -1511,8 +1528,20 @@ ORDER BY DATE_USING ASC
         DIECUT_TYPE: DIECUT_TYPE,
       });
 
+      const bothdatesql = `SELECT dm.ORDER_DATE, ds.DUE_DATE, dm.ORDER_DATE_TYPE   
+      FROM KPDBA.DIECUT_MODIFY dm, kpdba.DIECUT_SN ds   
+      WHERE dm.DIECUT_SN  = ds.DIECUT_SN AND dm.DIECUT_SN = :DIECUT_SN `
+
+
+       const bothdatesqlResult = await executeQuery(bothdatesql, {
+        DIECUT_SN: DIECUT_SN,
+      });
+      
       if (checkResult.rows.length == 0) {
-        return [];
+        return {
+        checkResult,
+        bothdatesqlResult
+      };
       }
       // console.log(checkSNQuery)
       const jobIds = checkResult.rows.map((row) => row.JOB_ID);
@@ -1538,10 +1567,12 @@ ORDER BY DATE_USING ASC
         ...(jobres.rows.find((item2) => item2.JOB_ID === item1.JOB_ID) || {}),
       }));
 
+      
       // Return just the array instead of wrapping it in an object
 
       return {
         combinedLog,
+        bothdatesqlResult
       };
     } catch (error) {
       logger.error("Error in DiecutService.saveDiecutSNList:", error);

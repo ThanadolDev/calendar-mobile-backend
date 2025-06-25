@@ -68,8 +68,11 @@ router.post('/orderchange', diecutController.orderChange);
 
 router.get('/types', diecutController.getDiecuttypes);
 
-router.get('/refreshstore', diecutController.refreshStore);
-
+router.get('/refreshstore', (req, res, next) => {
+  req.setTimeout(120000); // 2 minutes
+  res.setTimeout(120000); // 2 minutes
+  next();
+}, diecutController.refreshStore);
 router.get('/infos', diecutController.getDiecutInfos);
 
 router.post('/getallowedtypes', diecutController.getDiecutAllowedtypes);

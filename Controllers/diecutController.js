@@ -380,7 +380,7 @@ exports.getBladeChangeCount = async (req, res, next) => {
 exports.getJobOrderList = async (req, res, next) => {
   try {
     // Validate request body
-    const { diecutId, DIECUT_TYPE } = req.body;
+    const { diecutId, DIECUT_TYPE, DIECUT_SN } = req.body;
     
     if (!diecutId ) {
       return next(new ApiError('Invalid request body. Required: diecutId ', 400));
@@ -390,16 +390,18 @@ exports.getJobOrderList = async (req, res, next) => {
     logger.info(`Find diecut SN list for: ${diecutId}`);
     
     // Call service function to handle database operations
-    const result = await DiecutStatus.getJobOrderList(diecutId,DIECUT_TYPE);
-    
+    const result = await DiecutStatus.getJobOrderList(diecutId,DIECUT_TYPE,DIECUT_SN);
+    console.log(result)
     // Return success response
     res.status(200).json(formatResponse(
       true,
       'Diecut SN list saved successfully',
       { 
         diecutId,
-        jobList: result.combinedLog
-      }
+        jobList: result.combinedLog,
+        dateList: result.bothdatesqlResult.rows
+      },
+      
     ));
   } catch (error) {
     logger.error('Error saving diecut SN list', error);
@@ -611,7 +613,8 @@ exports.updateOrderInfo = async (req, res, next) => {
       jobId,
       prodDesc,
       prodId,
-      REVISION
+      REVISION,
+      orderDateType
     } = req.body;
     const { ORG_ID, EMP_ID } = req.user;
     
@@ -629,7 +632,8 @@ exports.updateOrderInfo = async (req, res, next) => {
       jobId,
       prodDesc,
       prodId,
-      REVISION
+      REVISION,
+      orderDateType
     });
     
     res.status(200).json(formatResponse(
