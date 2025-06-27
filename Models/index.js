@@ -1,6 +1,7 @@
 const User = require('./user');
 const { Diecut, DiecutSN,DiecutStatus } = require('./diecut');
 const { Tooling, Material } = require('./tooling');
+const { Expression } = require('./expression');
 
 module.exports = {
   User,
@@ -8,5 +9,6 @@ module.exports = {
   DiecutSN,
   Tooling,
   Material,
-  DiecutStatus
+  DiecutStatus,
+  Expression
 };
