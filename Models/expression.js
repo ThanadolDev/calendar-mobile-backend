@@ -345,7 +345,15 @@ static async getSentExpressions(empId, filters = {}) {
   /**
    * Add attachment to expression
    * @param {string} expId - Expression ID
-   * @param {Object} attachmentData - Attachment data
+   * @param {Object} attachmentData - Attachment data with structure:
+   *   {
+   *     fileId: string,
+   *     fileName: string,
+   *     originalName?: string,
+   *     size?: number,
+   *     mimeType?: string,
+   *     url?: string (filepath from server)
+   *   }
    * @param {string} orgId - Organization ID
    * @param {string} empId - Employee ID
    */
@@ -355,11 +363,19 @@ static async getSentExpressions(empId, filters = {}) {
       const maxSeqResult = await executeQuery(getMaxSeqSql, { expId });
       const nextSeq = maxSeqResult.rows[0].NEXT_SEQ;
 
+      // Store both FILE_ID (from upload server) and filepath in STATUS field as JSON for additional metadata
+      const metadata = {
+        filepath: attachmentData.url,
+        size: attachmentData.size,
+        mimeType: attachmentData.mimeType,
+        originalName: attachmentData.originalName || attachmentData.fileName
+      };
+
       const sql = `
         INSERT INTO KPDBA.EXPRESSION_ATTACHMENT (
-          EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, STATUS, CR_DATE, CR_OID, CR_UID
+          EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, SORT, STATUS, CR_DATE, CR_OID, CR_UID
         ) VALUES (
-          :expId, :seq, :fileId, :fileName, :attachType, 'T', SYSDATE, :orgId, :empId
+          :expId, :seq, :fileId, :fileName, :attachType, :sort, :status, SYSDATE, :orgId, :empId
         )
       `;
 
@@ -369,9 +385,13 @@ static async getSentExpressions(empId, filters = {}) {
         fileId: attachmentData.fileId,
         fileName: attachmentData.fileName,
         attachType: attachmentData.type || 'FILE',
+        sort: nextSeq.toString().padStart(2, '0'),
+        status: JSON.stringify(metadata), // Store metadata as JSON in STATUS field
         orgId,
         empId
       });
+
+      logger.info(`Attachment added successfully: EXP_ID=${expId}, FILE_ID=${attachmentData.fileId}, FILE_NAME=${attachmentData.fileName}`);
     } catch (error) {
       logger.error("Error adding attachment:", error);
       throw error;
@@ -381,18 +401,48 @@ static async getSentExpressions(empId, filters = {}) {
   /**
    * Get attachments for expression
    * @param {string} expId - Expression ID
-   * @returns {Promise<Array>} - Array of attachments
+   * @returns {Promise<Array>} - Array of attachments with parsed metadata
    */
   static async getAttachments(expId) {
     try {
       const sql = `
-        SELECT * FROM KPDBA.EXPRESSION_ATTACHMENT
-        WHERE EXP_ID = :expId AND STATUS = 'T'
+        SELECT EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, SORT, STATUS, CR_DATE, CR_OID, CR_UID
+        FROM KPDBA.EXPRESSION_ATTACHMENT
+        WHERE EXP_ID = :expId
         ORDER BY SEQ
       `;
 
       const result = await executeQuery(sql, { expId });
-      return result.rows;
+      
+      // Parse metadata from STATUS field and transform for frontend
+      return result.rows.map(attachment => {
+        let metadata = {};
+        
+        // Try to parse STATUS as JSON metadata
+        try {
+          if (attachment.STATUS && attachment.STATUS !== 'T' && attachment.STATUS !== 'F') {
+            metadata = JSON.parse(attachment.STATUS);
+          }
+        } catch (e) {
+          // If STATUS is not JSON, treat as simple status
+          logger.warn(`Could not parse attachment metadata for ${attachment.FILE_ID}:`, e.message);
+        }
+
+        return {
+          fileId: attachment.FILE_ID,
+          fileName: attachment.FILE_NAME,
+          type: attachment.ATTACH_TYPE,
+          seq: attachment.SEQ,
+          sort: attachment.SORT,
+          // Include parsed metadata
+          originalName: metadata.originalName || attachment.FILE_NAME,
+          size: metadata.size,
+          mimeType: metadata.mimeType,
+          url: metadata.filepath, // filepath for download
+          createdDate: attachment.CR_DATE,
+          createdBy: attachment.CR_UID
+        };
+      });
     } catch (error) {
       logger.error("Error getting attachments:", error);
       throw error;
