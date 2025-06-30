@@ -69,10 +69,12 @@ class Expression {
                END as privacy,
                CASE 
                  WHEN EH.STATUS = 'T' THEN 'published'
-                 WHEN EH.STATUS = 'F' THEN 'draft'
+                 WHEN EH.STATUS = 'P' THEN 'draft'
+                 WHEN EH.STATUS = 'F' THEN 'deleted'
                END as expressionStatus
         FROM KPDBA.EXPRESSION_HEAD EH
         WHERE EH.EXP_ID = :expId
+          AND EH.STATUS != 'F'
       `;
 
       const result = await executeQuery(sql, { expId });
@@ -111,7 +113,7 @@ class Expression {
                END as privacy,
                CASE 
                  WHEN EH.STATUS = 'T' THEN 'published'
-                 WHEN EH.STATUS = 'F' THEN 'draft'
+                 WHEN EH.STATUS = 'P' THEN 'draft'
                END as expressionStatus
         FROM KPDBA.EXPRESSION_HEAD EH
         WHERE EH.STATUS = 'T'
@@ -145,6 +147,7 @@ class Expression {
             UPDATE_OID = :updateOid,
             UPDATE_UID = :updateUid
         WHERE EXP_ID = :expId
+          AND CR_UID = :updateUid
       `;
 
       const result = await executeQuery(sql, {
@@ -196,6 +199,8 @@ class Expression {
             CANCEL_OID = :orgId,
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
+          AND STATUS = 'P'
+          AND CR_UID = :empId
       `;
 
       const result = await executeQuery(sql, { expId, orgId, empId });
@@ -299,13 +304,15 @@ static async getSentExpressions(empId, filters = {}) {
         END AS TYPE,
         CASE 
           WHEN EH.STATUS = 'T' THEN 'published'
-          WHEN EH.STATUS = 'F' THEN 'draft'
+          WHEN EH.STATUS = 'P' THEN 'draft'
+          WHEN EH.STATUS = 'F' THEN 'deleted'
         END AS EXPRESSIONSTATUS,
         TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') AS EXP_DATE_STR,
         EXTRACT(MONTH FROM EH.EXP_DATE) - 1 AS EXP_MONTH,
         EXTRACT(YEAR FROM EH.EXP_DATE) AS EXP_YEAR
       FROM KPDBA.EXPRESSION_HEAD EH
       WHERE EH.CR_UID = :empId
+        AND EH.STATUS != 'F'
     `;
 
     const binds = { empId };
@@ -420,7 +427,7 @@ static async getSentExpressions(empId, filters = {}) {
         
         // Try to parse STATUS as JSON metadata
         try {
-          if (attachment.STATUS && attachment.STATUS !== 'T' && attachment.STATUS !== 'F') {
+          if (attachment.STATUS && attachment.STATUS !== 'T' && attachment.STATUS !== 'P' && attachment.STATUS !== 'F') {
             metadata = JSON.parse(attachment.STATUS);
           }
         } catch (e) {

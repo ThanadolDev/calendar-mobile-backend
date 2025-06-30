@@ -18,7 +18,7 @@ exports.createExpression = asyncHandler(async (req, res, next) => {
   // Map frontend values to DB values
   const expType = type === 'praise' ? 'G' : 'B';
   const expKind = privacy === 'public' ? 'X' : 'H';
-  const expStatus = status === 'published' ? 'T' : 'F';
+  const expStatus = status === 'published' ? 'T' : 'P';
   
   const result = await Expression.create({
     expType,
@@ -81,7 +81,7 @@ exports.updateExpression = asyncHandler(async (req, res, next) => {
   
   const expType = type === 'praise' ? 'G' : 'B';
   const expKind = privacy === 'public' ? 'X' : 'H';
-  const expStatus = status === 'published' ? 'T' : 'F';
+  const expStatus = status === 'published' ? 'T' : 'P';
   
   const expression = await Expression.update(req.params.id, {
     expType,
