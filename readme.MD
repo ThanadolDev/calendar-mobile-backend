@@ -1,175 +1,338 @@
-diecut-management-api/
-├── .env                    # Environment variables
-├── .gitignore              # Git ignore file
-├── package.json            # Project dependencies and scripts
-├── app.js                  # Main application file
-├── server.js               # Server startup file
-├── config/
-│   ├── database.js         # Database configuration
-│   └── config.js           # Application configuration
-├── models/
-│   ├── index.js            # Export all models
-│   ├── diecut.js           # Diecut model
-│   ├── user.js             # User model
-│   └── tooling.js          # Tooling model
-├── controllers/
-│   ├── index.js            # Export all controllers
-│   ├── diecutController.js # Diecut controller
-│   ├── authController.js   # Authentication controller
-│   └── toolingController.js# Tooling controller
-├── routes/
-│   ├── index.js            # Main router
-│   ├── diecutRoutes.js     # Diecut routes
-│   ├── authRoutes.js       # Authentication routes
-│   └── toolingRoutes.js    # Tooling routes
-├── middleware/
-│   ├── auth.js             # Authentication middleware
-│   └── error.js            # Error handling middleware
-├── utils/
-│   ├── logger.js           # Logging utility
-│   └── helpers.js          # Helper functions
-└── tests/                  # Test files
-    ├── unit/
-    └── integration/
+# Handbook Backend API
 
+A Node.js Express API server for the Handbook Management System - enabling employees to share feedback, praise, and suggestions within their organization.
 
-    # Diecut Management API
+## 📋 Overview
 
-This project is an Express.js API with MVC architecture for managing diecuts and tooling. It's a conversion of a C# desktop application to a modern web API.
+This backend provides REST API endpoints for managing employee expressions (praise/feedback), user authentication, and organizational data. It connects to Oracle Database and uses JWT-based authentication through an external verification service.
 
-## Features
+## 🚀 Quick Start
 
-- User authentication with JWT
-- Diecut management (create, read, update, delete)
-- Tooling management
-- Serial number generation for diecuts
-- Image upload capability
-- Error handling
-- Logging
-- Oracle Database integration
+### Prerequisites
 
-## Project Structure
+- Node.js (v18 or higher)
+- Oracle Database access
+- VPN connection to company network
+- External authentication service access
 
-```
-diecut-management-api/
-├── .env                    # Environment variables
-├── .gitignore              # Git ignore file
-├── package.json            # Project dependencies and scripts
-├── app.js                  # Main application file
-├── server.js               # Server startup file
-├── config/                 # Configuration files
-├── models/                 # Database models
-├── controllers/            # Request handlers
-├── routes/                 # API routes
-├── middleware/             # Custom middleware
-├── utils/                  # Utility functions
-└── tests/                  # Test files
-```
+### Installation
 
-## Prerequisites
-
-- Node.js (v14 or higher)
-- Oracle Database
-- Oracle Instant Client
-
-## Installation
-
-1. Clone the repository:
-   ```
-   git clone https://github.com/yourusername/diecut-management-api
+1. **Clone the repository**
+   ```bash
+   git clone [repository-url]
+   cd handbook-backend
    ```
 
-2. Install dependencies:
-   ```
-   cd diecut-management-api
+2. **Install dependencies**
+   ```bash
    npm install
    ```
 
-3. Set up Oracle Instant Client:
-   - Download and install Oracle Instant Client: https://www.oracle.com/database/technologies/instant-client/downloads.html
-   - Set environment variables according to your OS:
-     - Windows: Add Oracle Instant Client to PATH
-     - macOS/Linux: Set LD_LIBRARY_PATH or DYLD_LIBRARY_PATH
+3. **Environment Configuration**
+   Create environment variables for:
+   ```bash
+   NODE_ENV=dev
+   DB_HOST=your_oracle_host
+   DB_PORT=1521
+   DB_SERVICE=your_service_name
+   DB_USER=your_username
+   DB_PASSWORD=your_password
+   ```
 
-4. Create .env file:
-   ```
-   cp .env.example .env
-   ```
-   Edit the .env file with your database credentials and other settings.
-
-5. Start the server:
-   ```
+4. **Start the server**
+   ```bash
+   # Development
    npm start
-   ```
-   
-   For development with auto-reload:
-   ```
-   npm run dev
+
+   # Production
+   npm run prod
    ```
 
-## API Endpoints
+The server will start on the default port (usually 2525).
+
+## 🏗️ Architecture
+
+### Core Components
+
+- **Express.js** - Web framework
+- **Oracle Database** - Data persistence
+- **JWT Authentication** - Token-based security
+- **Winston** - Logging system
+- **Multer** - File upload handling
+
+### Project Structure
+
+```
+handbook-backend/
+├── Controllers/           # Business logic
+│   ├── expressionController.js  # Expression CRUD operations
+│   └── authController.js        # Authentication logic
+├── Models/               # Database models
+│   ├── expression.js     # Expression data model
+│   └── user.js          # User data model
+├── middleware/          # Custom middleware
+│   ├── auth.js         # JWT verification
+│   └── error.js        # Error handling
+├── routes/             # API routes
+│   └── expressionRoute.js  # Expression endpoints
+├── config/             # Configuration
+│   ├── database.js     # Oracle DB connection
+│   └── config.js       # App configuration
+├── utils/              # Utilities
+│   ├── helpers.js      # Common functions
+│   └── logger.js       # Logging setup
+└── server.js           # Application entry point
+```
+
+## 🔧 API Endpoints
 
 ### Authentication
-- POST /api/auth/login - Log in and get JWT token
-- GET /api/auth/me - Get current user profile
-- GET /api/auth/version - Get application version
-
-### Diecuts
-- GET /api/diecuts - Get all diecuts
-- GET /api/diecuts/:id - Get diecut by ID
-- POST /api/diecuts - Create a new diecut
-- PUT /api/diecuts/:id - Update a diecut
-- DELETE /api/diecuts/:id - Delete a diecut
-- POST /api/diecuts/:id/serial - Generate a serial number for a diecut
-
-### Toolings
-- GET /api/toolings - Get all toolings
-- GET /api/toolings/:id - Get tooling by ID
-- POST /api/toolings - Create a new tooling
-- PUT /api/toolings/:id - Update a tooling
-- DELETE /api/toolings/:id - Delete a tooling
-- GET /api/toolings/materials/:prodId/:revision - Get materials by product ID and revision
-
-## Database Models
-
-### Users
-- User authentication and management
-
-### Diecuts
-- Diecut management
-- Serial number generation and tracking
-
-### Toolings
-- Tooling management
-- Material management
-
-## Development
-
-### Running Tests
+All endpoints require JWT token in Authorization header:
 ```
-npm test
+Authorization: Bearer <your-jwt-token>
 ```
 
-### Code Style
-The project follows JavaScript Standard Style. You can run the linter with:
+### Expressions API
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/expressions` | Get all expressions |
+| POST | `/api/expressions` | Create new expression |
+| GET | `/api/expressions/:id` | Get specific expression |
+| PUT | `/api/expressions/:id` | Update expression |
+| DELETE | `/api/expressions/:id` | Delete expression |
+| GET | `/api/expressions/received/:empId` | Get received expressions |
+| GET | `/api/expressions/sent/:empId` | Get sent expressions |
+
+### Request/Response Examples
+
+**Create Expression:**
+```bash
+POST /api/expressions
+Content-Type: application/json
+Authorization: Bearer <token>
+
+{
+  "type": "praise",           # "praise" or "suggestion"
+  "recipient": "EMP123",      # Employee ID
+  "content": "Great work!",   # Expression content
+  "privacy": "public",        # "public" or "private"
+  "status": "published"       # "published" or "draft"
+}
 ```
-npm run lint
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "EXP_ID": "EXP001",
+    "EXP_TYPE": "G",
+    "EXP_TO": "EMP123",
+    "EXP_DETAIL": "Great work!",
+    "EXP_KIND": "X",
+    "STATUS": "T",
+    "CREATED_AT": "2024-01-15T10:30:00Z"
+  }
+}
 ```
 
-## Production Deployment
+## 🗄️ Database Schema
 
-1. Set NODE_ENV to production:
-   ```
-   NODE_ENV=production
-   ```
+### Expression Table (KPDBA.EXPRESSIONS)
 
-2. Ensure all production environment variables are correctly set in your deployment environment
+| Column | Type | Description |
+|--------|------|-------------|
+| EXP_ID | VARCHAR2(50) | Primary key |
+| EXP_TYPE | CHAR(1) | G=Give/Praise, B=By/Suggestion |
+| EXP_TO | VARCHAR2(50) | Recipient employee ID |
+| EXP_FROM | VARCHAR2(50) | Sender employee ID |
+| EXP_SUBJECT | VARCHAR2(200) | Short description |
+| EXP_DETAIL | CLOB | Full content |
+| EXP_KIND | CHAR(1) | X=eXternal/Public, H=Hidden/Private |
+| STATUS | CHAR(1) | T=True/Published, F=False/Draft |
+| CR_OID | VARCHAR2(50) | Organization ID |
+| CREATED_AT | TIMESTAMP | Creation timestamp |
 
-3. Start the server:
-   ```
-   npm start
-   ```
+## 🔐 Security
 
-## License
+### Authentication Flow
+1. Client sends JWT token from external auth service
+2. Backend validates token with `https://api.nitisakc.dev/auth/verify`
+3. User profile extracted from verification response
+4. User data attached to request object (`req.user`)
 
-[ISC](https://opensource.org/licenses/ISC)
+### Authorization
+- All expression endpoints require authentication
+- Users can only access data from their organization
+- Employee ID validation ensures data privacy
+
+### Data Validation
+- Input sanitization for all endpoints
+- Required field validation
+- Type checking for enums (praise/suggestion, public/private)
+
+## 🚨 Error Handling
+
+### Error Response Format
+```json
+{
+  "success": false,
+  "error": {
+    "statusCode": 400,
+    "message": "Recipient and content are required"
+  }
+}
+```
+
+### Common Error Codes
+- `400` - Bad Request (validation errors)
+- `401` - Unauthorized (invalid/missing token)
+- `403` - Forbidden (insufficient permissions)
+- `404` - Not Found (resource doesn't exist)
+- `500` - Internal Server Error
+
+## 📝 Logging
+
+### Log Levels
+- **Error**: Database errors, authentication failures
+- **Warn**: Validation warnings, deprecated usage
+- **Info**: API requests, successful operations
+- **Debug**: Detailed execution flow
+
+### Log Files
+- `logs/error.log` - Error level and above
+- `logs/combined.log` - All log levels
+- Console output in development
+
+## 🔧 Configuration
+
+### Environment Variables
+```bash
+# Database
+DB_HOST=oracle.company.com
+DB_PORT=1521
+DB_SERVICE=PROD
+DB_USER=handbook_user
+DB_PASSWORD=secure_password
+
+# Application
+NODE_ENV=production
+PORT=2525
+JWT_SECRET=your_jwt_secret
+
+# External Services
+AUTH_VERIFY_URL=https://api.nitisakc.dev/auth/verify
+```
+
+### Database Connection Pool
+- Initial: 1 connection
+- Maximum: 10 connections
+- Idle timeout: 30 seconds
+- Connection timeout: 60 seconds
+
+## 🚀 Deployment
+
+### Production Checklist
+- [ ] Environment variables configured
+- [ ] Database connection tested
+- [ ] VPN access verified
+- [ ] External auth service accessible
+- [ ] Log directory permissions set
+- [ ] PM2 or similar process manager configured
+
+### PM2 Configuration
+```javascript
+// ecosystem.config.js
+module.exports = {
+  apps: [{
+    name: 'handbook-backend',
+    script: 'server.js',
+    env: {
+      NODE_ENV: 'production',
+      PORT: 2525
+    },
+    instances: 2,
+    max_memory_restart: '1G'
+  }]
+}
+```
+
+## 🧪 Testing
+
+### Manual Testing
+```bash
+# Health check
+curl http://localhost:2525/api/health
+
+# Test authentication
+curl -H "Authorization: Bearer <token>" \
+     http://localhost:2525/api/expressions
+```
+
+### Database Testing
+```sql
+-- Verify expression creation
+SELECT * FROM KPDBA.EXPRESSIONS 
+WHERE EXP_FROM = 'your_emp_id' 
+ORDER BY CREATED_AT DESC;
+```
+
+## 🔍 Troubleshooting
+
+### Common Issues
+
+**Database Connection Errors**
+- Verify VPN connection
+- Check Oracle client installation
+- Validate connection string
+- Test database credentials
+
+**Authentication Failures**
+- Verify external auth service availability
+- Check JWT token format
+- Validate token expiration
+- Test auth verification endpoint
+
+**Performance Issues**
+- Monitor database connection pool
+- Check Oracle database performance
+- Review log files for bottlenecks
+- Verify network latency to database
+
+### Debug Mode
+```bash
+# Enable detailed logging
+DEBUG=handbook:* npm start
+
+# Database query logging
+DB_DEBUG=true npm start
+```
+
+## 🤝 Contributing
+
+### Code Standards
+- Use ESLint for code quality
+- Follow RESTful API conventions
+- Include error handling for all operations
+- Add logging for important operations
+- Validate all user inputs
+
+### Development Workflow
+1. Create feature branch
+2. Implement changes with proper error handling
+3. Test with real database connections
+4. Update documentation if needed
+5. Submit pull request
+
+## 📞 Support
+
+For technical support or questions:
+- Check logs in `logs/` directory
+- Review database connection status
+- Verify external service availability
+- Contact system administrator for VPN/database access
+
+---
+
+**Note**: This backend requires VPN access to company network and proper database credentials to function correctly.

@@ -221,8 +221,8 @@ class Expression {
                  WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'
                END as type,
                CASE 
-                 WHEN EH.EXP_KIND = 'X' THEN true
-                 WHEN EH.EXP_KIND = 'H' THEN false
+                 WHEN EH.EXP_KIND = 'X' THEN 1
+                 WHEN EH.EXP_KIND = 'H' THEN 0
                END as isPublic,
                TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') as date,
                TO_CHAR(EH.EXP_DATE, 'HH24:MI') as time,
