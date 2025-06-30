@@ -212,55 +212,65 @@ class Expression {
    * @param {Object} filters - Time period filters
    * @returns {Promise<Array>} - Array of received expressions
    */
-  static async getReceivedExpressions(empId, filters = {}) {
-    try {
-      let sql = `
-        SELECT EH.*,
-               CASE 
-                 WHEN EH.EXP_TYPE = 'G' THEN 'praise'
-                 WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'
-               END as type,
-               CASE 
-                 WHEN EH.EXP_KIND = 'X' THEN true
-                 WHEN EH.EXP_KIND = 'H' THEN false
-               END as isPublic,
-               TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') as date,
-               TO_CHAR(EH.EXP_DATE, 'HH24:MI') as time,
-               EXTRACT(MONTH FROM EH.EXP_DATE) - 1 as month,
-               EXTRACT(YEAR FROM EH.EXP_DATE) as year
-        FROM KPDBA.EXPRESSION_HEAD EH
-        WHERE EH.EXP_TO = :empId 
+static async getReceivedExpressions(empId, filters = {}) {
+  try {
+    let sql = `
+      SELECT 
+        EH.EXP_ID,
+        EH.EXP_TO,
+        EH.EXP_TYPE,
+        EH.EXP_KIND,
+        EH.EXP_DATE,
+        EH.STATUS,
+        CASE 
+          WHEN EH.EXP_TYPE = 'G' THEN 'praise'
+          WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'
+        END AS TYPE,
+        CASE 
+          WHEN EH.EXP_KIND = 'X' THEN 1
+          WHEN EH.EXP_KIND = 'H' THEN 0
+        END AS ISPUBLIC,
+        TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') AS EXP_DATE_STR,
+        TO_CHAR(EH.EXP_DATE, 'HH24:MI') AS EXP_TIME,
+        EXTRACT(MONTH FROM EH.EXP_DATE) - 1 AS EXP_MONTH,
+        EXTRACT(YEAR FROM EH.EXP_DATE) AS EXP_YEAR
+      FROM KPDBA.EXPRESSION_HEAD EH
+      WHERE EH.EXP_TO = :empId
         AND EH.STATUS = 'T'
+    `;
+
+    const binds = { empId };
+
+    // Add time period filters
+    if (filters.timePeriod === 'monthly' && filters.year && filters.month !== undefined) {
+      sql += `
+        AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year
+        AND EXTRACT(MONTH FROM EH.EXP_DATE) = :month
       `;
-
-      const binds = { empId };
-
-      // Add time period filters
-      if (filters.timePeriod === 'monthly' && filters.year && filters.month !== undefined) {
-        sql += ` AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year 
-                 AND EXTRACT(MONTH FROM EH.EXP_DATE) = :month`;
-        binds.year = filters.year;
-        binds.month = parseInt(filters.month) + 1; // Convert 0-indexed to 1-indexed
-      } else if (filters.timePeriod === 'yearly' && filters.year) {
-        sql += ` AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year`;
-        binds.year = filters.year;
-      }
-
-      sql += ` ORDER BY EH.EXP_DATE DESC`;
-
-      const result = await executeQuery(sql, binds);
-      
-      // Get attachments for each expression
-      for (let expression of result.rows) {
-        expression.attachments = await this.getAttachments(expression.EXP_ID);
-      }
-      
-      return result.rows;
-    } catch (error) {
-      logger.error("Error getting received expressions:", error);
-      throw error;
+      binds.year = filters.year;
+      binds.month = parseInt(filters.month) + 1; // Convert 0-indexed to 1-indexed
+    } else if (filters.timePeriod === 'yearly' && filters.year) {
+      sql += `
+        AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year
+      `;
+      binds.year = filters.year;
     }
+
+    sql += ` ORDER BY EH.EXP_DATE DESC`;
+
+    const result = await executeQuery(sql, binds);
+
+    // Get attachments for each expression
+    for (let expression of result.rows) {
+      expression.attachments = await this.getAttachments(expression.EXP_ID);
+    }
+
+    return result.rows;
+  } catch (error) {
+    logger.error("Error getting received expressions:", error);
+    throw error;
   }
+}
 
   /**
    * Get sent expressions for a user
@@ -268,53 +278,65 @@ class Expression {
    * @param {Object} filters - Time period filters
    * @returns {Promise<Array>} - Array of sent expressions
    */
-  static async getSentExpressions(empId, filters = {}) {
-    try {
-      let sql = `
-        SELECT EH.*,
-               CASE 
-                 WHEN EH.EXP_TYPE = 'G' THEN 'praise'
-                 WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'
-               END as type,
-               CASE 
-                 WHEN EH.STATUS = 'T' THEN 'published'
-                 WHEN EH.STATUS = 'F' THEN 'draft'
-               END as expressionStatus,
-               TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') as date,
-               EXTRACT(MONTH FROM EH.EXP_DATE) - 1 as month,
-               EXTRACT(YEAR FROM EH.EXP_DATE) as year
-        FROM KPDBA.EXPRESSION_HEAD EH
-        WHERE EH.CR_UID = :empId
+static async getSentExpressions(empId, filters = {}) {
+  try {
+    let sql = `
+      SELECT 
+        EH.EXP_ID,
+        EH.EXP_TO,
+        EH.EXP_TYPE,
+        EH.EXP_KIND,
+        EH.EXP_DATE,
+        EH.STATUS,
+        EH.CR_UID,
+        CASE 
+          WHEN EH.EXP_TYPE = 'G' THEN 'praise'
+          WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'
+        END AS TYPE,
+        CASE 
+          WHEN EH.STATUS = 'T' THEN 'published'
+          WHEN EH.STATUS = 'F' THEN 'draft'
+        END AS EXPRESSIONSTATUS,
+        TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') AS EXP_DATE_STR,
+        EXTRACT(MONTH FROM EH.EXP_DATE) - 1 AS EXP_MONTH,
+        EXTRACT(YEAR FROM EH.EXP_DATE) AS EXP_YEAR
+      FROM KPDBA.EXPRESSION_HEAD EH
+      WHERE EH.CR_UID = :empId
+    `;
+
+    const binds = { empId };
+
+    // Add time period filters
+    if (filters.timePeriod === 'monthly' && filters.year && filters.month !== undefined) {
+      sql += `
+        AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year
+        AND EXTRACT(MONTH FROM EH.EXP_DATE) = :month
       `;
-
-      const binds = { empId };
-
-      // Add time period filters
-      if (filters.timePeriod === 'monthly' && filters.year && filters.month !== undefined) {
-        sql += ` AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year 
-                 AND EXTRACT(MONTH FROM EH.EXP_DATE) = :month`;
-        binds.year = filters.year;
-        binds.month = parseInt(filters.month) + 1;
-      } else if (filters.timePeriod === 'yearly' && filters.year) {
-        sql += ` AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year`;
-        binds.year = filters.year;
-      }
-
-      sql += ` ORDER BY EH.EXP_DATE DESC`;
-
-      const result = await executeQuery(sql, binds);
-      
-      // Get attachments for each expression
-      for (let expression of result.rows) {
-        expression.attachments = await this.getAttachments(expression.EXP_ID);
-      }
-      
-      return result.rows;
-    } catch (error) {
-      logger.error("Error getting sent expressions:", error);
-      throw error;
+      binds.year = filters.year;
+      binds.month = parseInt(filters.month) + 1; // Convert 0-based to 1-based month
+    } else if (filters.timePeriod === 'yearly' && filters.year) {
+      sql += `
+        AND EXTRACT(YEAR FROM EH.EXP_DATE) = :year
+      `;
+      binds.year = filters.year;
     }
+
+    sql += ` ORDER BY EH.EXP_DATE DESC`;
+
+    const result = await executeQuery(sql, binds);
+
+    // Get attachments for each expression
+    for (let expression of result.rows) {
+      expression.attachments = await this.getAttachments(expression.EXP_ID);
+    }
+
+    return result.rows;
+  } catch (error) {
+    logger.error("Error getting sent expressions:", error);
+    throw error;
   }
+}
+
 
   /**
    * Add attachment to expression
