@@ -164,7 +164,7 @@ class Expression {
 
       // Handle attachment updates if provided
       if (expressionData.attachments) {
-        // Delete existing attachments
+        // Delete existing attachmentsf
         await this.deleteAttachments(expId);
         
         // Add new attachments
@@ -222,6 +222,7 @@ static async getReceivedExpressions(empId, filters = {}) {
         EH.EXP_KIND,
         EH.EXP_DATE,
         EH.STATUS,
+        EH.EXP_DETAIL,
         CASE 
           WHEN EH.EXP_TYPE = 'G' THEN 'praise'
           WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'
@@ -232,7 +233,7 @@ static async getReceivedExpressions(empId, filters = {}) {
         END AS ISPUBLIC,
         TO_CHAR(EH.EXP_DATE, 'YYYY-MM-DD') AS EXP_DATE_STR,
         TO_CHAR(EH.EXP_DATE, 'HH24:MI') AS EXP_TIME,
-        EXTRACT(MONTH FROM EH.EXP_DATE) - 1 AS EXP_MONTH,
+        EXTRACT(MONTH FROM EH.EXP_DATE)  AS EXP_MONTH,
         EXTRACT(YEAR FROM EH.EXP_DATE) AS EXP_YEAR
       FROM KPDBA.EXPRESSION_HEAD EH
       WHERE EH.EXP_TO = :empId
@@ -288,6 +289,8 @@ static async getSentExpressions(empId, filters = {}) {
         EH.EXP_KIND,
         EH.EXP_DATE,
         EH.STATUS,
+        EH.EXP_SUBJECT,
+        EH.EXP_DETAIL,
         EH.CR_UID,
         CASE 
           WHEN EH.EXP_TYPE = 'G' THEN 'praise'
