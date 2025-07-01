@@ -224,6 +224,7 @@ static async getReceivedExpressions(empId, filters = {}) {
         EH.EXP_DATE,
         EH.STATUS,
         EH.EXP_DETAIL,
+        EH.CR_UID,
         CASE 
           WHEN EH.EXP_TYPE = 'G' THEN 'praise'
           WHEN EH.EXP_TYPE = 'B' THEN 'suggestion'

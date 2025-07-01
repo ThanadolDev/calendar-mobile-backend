@@ -8,7 +8,7 @@ router.use(protect);
 
 router.route('/')
   .get(expressionController.getAllExpressions)
-  .post(expressionController.createExpression); // No multer needed
+  .post(expressionController.createExpression); 
 
 router.route('/:id')
   .get(expressionController.getExpression)
