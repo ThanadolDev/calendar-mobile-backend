@@ -13,7 +13,7 @@ router.route('/')
 router.route('/:id')
   .get(expressionController.getExpression)
   .put(expressionController.updateExpression)
-  .delete(expressionController.deleteExpression);
+  .post(expressionController.deleteExpression);
 
 router.get('/received/:empId', expressionController.getReceivedExpressions);
 router.get('/sent/:empId', expressionController.getSentExpressions);

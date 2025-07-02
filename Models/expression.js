@@ -74,7 +74,7 @@ class Expression {
                END as expressionStatus
         FROM KPDBA.EXPRESSION_HEAD EH
         WHERE EH.EXP_ID = :expId
-          AND EH.STATUS != 'F'
+          AND (EH.CANCEL_FLAG IS NULL OR EH.CANCEL_FLAG != 'T')
       `;
 
       const result = await executeQuery(sql, { expId });
@@ -194,13 +194,14 @@ class Expression {
     try {
       const sql = `
         UPDATE KPDBA.EXPRESSION_HEAD
-        SET STATUS = 'F',
+        SET CANCEL_FLAG = 'T',
             CANCEL_DATE = SYSDATE,
             CANCEL_OID = :orgId,
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
           AND STATUS = 'P'
           AND CR_UID = :empId
+          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
       `;
 
       const result = await executeQuery(sql, { expId, orgId, empId });
@@ -313,7 +314,7 @@ static async getSentExpressions(empId, filters = {}) {
         EXTRACT(YEAR FROM EH.EXP_DATE) AS EXP_YEAR
       FROM KPDBA.EXPRESSION_HEAD EH
       WHERE EH.CR_UID = :empId
-        AND EH.STATUS != 'F'
+        AND (EH.CANCEL_FLAG IS NULL OR EH.CANCEL_FLAG != 'T')
     `;
 
     const binds = { empId };
@@ -417,6 +418,7 @@ static async getSentExpressions(empId, filters = {}) {
         SELECT EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, SORT, STATUS, CR_DATE, CR_OID, CR_UID
         FROM KPDBA.EXPRESSION_ATTACHMENT
         WHERE EXP_ID = :expId
+          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
         ORDER BY SEQ
       `;
 
@@ -465,8 +467,10 @@ static async getSentExpressions(empId, filters = {}) {
     try {
       const sql = `
         UPDATE KPDBA.EXPRESSION_ATTACHMENT
-        SET STATUS = 'F'
+        SET CANCEL_FLAG = 'T',
+            CANCEL_DATE = SYSDATE
         WHERE EXP_ID = :expId
+          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
       `;
 
       await executeQuery(sql, { expId });
