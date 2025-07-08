@@ -638,13 +638,12 @@ static async getSentExpressions(empId, filters = {}) {
     try {
       const sql = `
         UPDATE KPDBA.EXPRESSION_ATTACHMENT
-        SET CANCEL_FLAG = 'T',
+        SET STATUS = 'F',
             CANCEL_DATE = SYSDATE,
             CANCEL_OID = :orgId,
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
           AND FILE_ID = :fileId
-          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
       `;
 
       const result = await executeQuery(sql, { expId, fileId, orgId, empId });
@@ -667,13 +666,12 @@ static async getSentExpressions(empId, filters = {}) {
     try {
       const sql = `
         UPDATE KPDBA.EXPRESSION_ATTACHMENT
-        SET CANCEL_FLAG = 'T',
+        SET STATUS = 'F',
             CANCEL_DATE = SYSDATE,
             CANCEL_OID = :orgId,
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
           AND FILE_ID = :fileId
-          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
       `;
 
       const result = await executeQueryWithConnection(connection, sql, { expId, fileId, orgId, empId });
