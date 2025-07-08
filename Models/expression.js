@@ -206,6 +206,7 @@ class Expression {
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
           AND CR_UID = :empId
+          AND STATUS != 'F'
       `;
 
       const result = await executeQuery(sql, { expId, orgId, empId });
@@ -318,6 +319,7 @@ static async getSentExpressions(empId, filters = {}) {
         EXTRACT(YEAR FROM EH.EXP_DATE) AS EXP_YEAR
       FROM KPDBA.EXPRESSION_HEAD EH
       WHERE EH.CR_UID = :empId
+        AND EH.STATUS != 'F'
     `;
 
     const binds = { empId };
