@@ -375,14 +375,6 @@ static async getSentExpressions(empId, filters = {}) {
       const maxSeqResult = await executeQuery(getMaxSeqSql, { expId });
       const nextSeq = maxSeqResult.rows[0].NEXT_SEQ;
 
-      // Store both FILE_ID (from upload server) and filepath in STATUS field as JSON for additional metadata
-      const metadata = {
-        filepath: attachmentData.url,
-        size: attachmentData.size,
-        mimeType: attachmentData.mimeType,
-        originalName: attachmentData.originalName || attachmentData.fileName
-      };
-
       const sql = `
         INSERT INTO KPDBA.EXPRESSION_ATTACHMENT (
           EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, SORT, STATUS, CR_DATE, CR_OID, CR_UID
@@ -390,7 +382,7 @@ static async getSentExpressions(empId, filters = {}) {
           :expId, :seq, :fileId, :fileName, :attachType, :sort, :status, SYSDATE, :orgId, :empId
         )
       `;
-      console.log(nextSeq)
+
       await executeQuery(sql, {
         expId,
         seq: nextSeq,
@@ -398,7 +390,7 @@ static async getSentExpressions(empId, filters = {}) {
         fileName: attachmentData.fileName,
         attachType: attachmentData.type || 'FILE',
         sort: nextSeq.toString().padStart(2, '0'),
-        status: 'T', 
+        status: 'T', // T = available, F = deleted
         orgId,
         empId
       });
@@ -424,14 +416,6 @@ static async getSentExpressions(empId, filters = {}) {
       const maxSeqResult = await executeQueryWithConnection(connection, getMaxSeqSql, { expId });
       const nextSeq = maxSeqResult.rows[0].NEXT_SEQ;
 
-      // Store both FILE_ID (from upload server) and filepath in STATUS field as JSON for additional metadata
-      const metadata = {
-        filepath: attachmentData.url,
-        size: attachmentData.size,
-        mimeType: attachmentData.mimeType,
-        originalName: attachmentData.originalName || attachmentData.fileName
-      };
-
       const sql = `
         INSERT INTO KPDBA.EXPRESSION_ATTACHMENT (
           EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, SORT, STATUS, CR_DATE, CR_OID, CR_UID
@@ -447,7 +431,7 @@ static async getSentExpressions(empId, filters = {}) {
         fileName: attachmentData.fileName,
         attachType: attachmentData.type || 'FILE',
         sort: nextSeq.toString().padStart(2, '0'),
-        status: JSON.stringify(metadata), // Store metadata as JSON in STATUS field
+        status: 'T', // T = available, F = deleted
         orgId,
         empId
       });
@@ -476,31 +460,18 @@ static async getSentExpressions(empId, filters = {}) {
 
       const result = await executeQuery(sql, { expId });
       
-      // Parse metadata from STATUS field and transform for frontend
+      // Transform for frontend
       return result.rows.map(attachment => {
-        let metadata = {};
-        
-        // Try to parse STATUS as JSON metadata
-        try {
-          if (attachment.STATUS && attachment.STATUS !== 'T' && attachment.STATUS !== 'P' && attachment.STATUS !== 'F') {
-            metadata = JSON.parse(attachment.STATUS);
-          }
-        } catch (e) {
-          // If STATUS is not JSON, treat as simple status
-          logger.warn(`Could not parse attachment metadata for ${attachment.FILE_ID}:`, e.message);
-        }
-
         return {
           fileId: attachment.FILE_ID,
           fileName: attachment.FILE_NAME,
           type: attachment.ATTACH_TYPE,
           seq: attachment.SEQ,
           sort: attachment.SORT,
-          // Include parsed metadata
-          originalName: metadata.originalName || attachment.FILE_NAME,
-          size: metadata.size,
-          mimeType: metadata.mimeType,
-          url: metadata.filepath, // filepath for download
+          originalName: attachment.FILE_NAME,
+          size: null, // Size not stored in database
+          mimeType: null, // MIME type not stored in database
+          url: null, // URL not stored in database
           createdDate: attachment.CR_DATE,
           createdBy: attachment.CR_UID
         };
@@ -644,6 +615,7 @@ static async getSentExpressions(empId, filters = {}) {
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
           AND FILE_ID = :fileId
+          AND STATUS = 'T'
       `;
 
       const result = await executeQuery(sql, { expId, fileId, orgId, empId });
@@ -672,6 +644,7 @@ static async getSentExpressions(empId, filters = {}) {
             CANCEL_UID = :empId
         WHERE EXP_ID = :expId
           AND FILE_ID = :fileId
+          AND STATUS = 'T'
       `;
 
       const result = await executeQueryWithConnection(connection, sql, { expId, fileId, orgId, empId });
