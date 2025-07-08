@@ -1,4 +1,4 @@
-const { executeQuery } = require("../config/database");
+const { executeQuery, executeTransaction, executeQueryWithConnection } = require("../config/database");
 const logger = require("../utils/logger");
 
 class Expression {
@@ -136,46 +136,53 @@ class Expression {
    */
   static async update(expId, expressionData) {
     try {
-      const sql = `
-        UPDATE KPDBA.EXPRESSION_HEAD
-        SET EXP_TYPE = :expType,
-            EXP_KIND = :expKind,
-            EXP_SUBJECT = :expSubject,
-            EXP_DETAIL = :expDetail,
-            STATUS = :status,
-            UPDATE_DATE = SYSDATE,
-            UPDATE_OID = :updateOid,
-            UPDATE_UID = :updateUid
-        WHERE EXP_ID = :expId
-          AND CR_UID = :updateUid
-      `;
+      // Use transaction to ensure expression and attachments are updated atomically
+      const result = await executeTransaction(async (connection) => {
+        // Update expression head
+        const sql = `
+          UPDATE KPDBA.EXPRESSION_HEAD
+          SET EXP_TYPE = :expType,
+              EXP_KIND = :expKind,
+              EXP_SUBJECT = :expSubject,
+              EXP_DETAIL = :expDetail,
+              STATUS = :status,
+              UPDATE_DATE = SYSDATE,
+              UPDATE_OID = :updateOid,
+              UPDATE_UID = :updateUid
+          WHERE EXP_ID = :expId
+            AND CR_UID = :updateUid
+        `;
 
-      const result = await executeQuery(sql, {
-        expId,
-        expType: expressionData.expType,
-        expKind: expressionData.expKind,
-        expSubject: expressionData.expSubject,
-        expDetail: expressionData.expDetail,
-        status: expressionData.status,
-        updateOid: expressionData.updateOid,
-        updateUid: expressionData.updateUid
+        const updateResult = await executeQueryWithConnection(connection, sql, {
+          expId,
+          expType: expressionData.expType,
+          expKind: expressionData.expKind,
+          expSubject: expressionData.expSubject,
+          expDetail: expressionData.expDetail,
+          status: expressionData.status,
+          updateOid: expressionData.updateOid,
+          updateUid: expressionData.updateUid
+        });
+
+        if (updateResult.rowsAffected === 0) {
+          throw new Error(`No expression found with ID: ${expId} or user not authorized to update`);
+        }
+
+        // Handle attachment updates if provided
+        if (expressionData.attachments) {
+          await this.updateAttachmentsWithConnection(
+            connection, 
+            expId, 
+            expressionData.attachments, 
+            expressionData.updateOid, 
+            expressionData.updateUid
+          );
+        }
+
+        return updateResult;
       });
 
-      if (result.rowsAffected === 0) {
-        return null;
-      }
-
-      // Handle attachment updates if provided
-      if (expressionData.attachments) {
-        // Delete existing attachmentsf
-        await this.deleteAttachments(expId);
-        
-        // Add new attachments
-        for (let attachment of expressionData.attachments) {
-          await this.addAttachment(expId, attachment, expressionData.updateOid, expressionData.updateUid);
-        }
-      }
-
+      // Return the updated expression
       return await this.findById(expId);
     } catch (error) {
       logger.error("Error updating expression:", error);
@@ -408,6 +415,55 @@ static async getSentExpressions(empId, filters = {}) {
   }
 
   /**
+   * Add attachment to expression using existing connection
+   * @param {Connection} connection - Database connection
+   * @param {string} expId - Expression ID
+   * @param {Object} attachmentData - Attachment data
+   * @param {string} orgId - Organization ID
+   * @param {string} empId - Employee ID
+   */
+  static async addAttachmentWithConnection(connection, expId, attachmentData, orgId, empId) {
+    try {
+      const getMaxSeqSql = `SELECT NVL(MAX(SEQ), 0) + 1 AS NEXT_SEQ FROM KPDBA.EXPRESSION_ATTACHMENT WHERE EXP_ID = :expId`;
+      const maxSeqResult = await executeQueryWithConnection(connection, getMaxSeqSql, { expId });
+      const nextSeq = maxSeqResult.rows[0].NEXT_SEQ;
+
+      // Store both FILE_ID (from upload server) and filepath in STATUS field as JSON for additional metadata
+      const metadata = {
+        filepath: attachmentData.url,
+        size: attachmentData.size,
+        mimeType: attachmentData.mimeType,
+        originalName: attachmentData.originalName || attachmentData.fileName
+      };
+
+      const sql = `
+        INSERT INTO KPDBA.EXPRESSION_ATTACHMENT (
+          EXP_ID, SEQ, FILE_ID, FILE_NAME, ATTACH_TYPE, SORT, STATUS, CR_DATE, CR_OID, CR_UID
+        ) VALUES (
+          :expId, :seq, :fileId, :fileName, :attachType, :sort, :status, SYSDATE, :orgId, :empId
+        )
+      `;
+
+      await executeQueryWithConnection(connection, sql, {
+        expId,
+        seq: nextSeq,
+        fileId: attachmentData.fileId,
+        fileName: attachmentData.fileName,
+        attachType: attachmentData.type || 'FILE',
+        sort: nextSeq.toString().padStart(2, '0'),
+        status: JSON.stringify(metadata), // Store metadata as JSON in STATUS field
+        orgId,
+        empId
+      });
+
+      logger.info(`Attachment added successfully: EXP_ID=${expId}, FILE_ID=${attachmentData.fileId}, FILE_NAME=${attachmentData.fileName}`);
+    } catch (error) {
+      logger.error("Error adding attachment with connection:", error);
+      throw error;
+    }
+  }
+
+  /**
    * Get attachments for expression
    * @param {string} expId - Expression ID
    * @returns {Promise<Array>} - Array of attachments with parsed metadata
@@ -460,7 +516,180 @@ static async getSentExpressions(empId, filters = {}) {
   }
 
   /**
-   * Delete attachments for expression
+   * Update attachments for expression by comparing existing vs new
+   * Only soft-deletes removed attachments and adds genuinely new ones
+   * @param {string} expId - Expression ID
+   * @param {Array} newAttachments - New attachments array from frontend
+   * @param {string} orgId - Organization ID
+   * @param {string} empId - Employee ID
+   */
+  static async updateAttachments(expId, newAttachments, orgId, empId) {
+    try {
+      // Get current attachments from database
+      const currentAttachments = await this.getAttachments(expId);
+      
+      // Create maps for easier comparison using fileId as key
+      const currentAttachmentMap = new Map(
+        currentAttachments.map(att => [att.fileId, att])
+      );
+      
+      const newAttachmentMap = new Map(
+        newAttachments.map(att => [att.fileId, att])
+      );
+      
+      // Find attachments to soft delete (in current but not in new)
+      const attachmentsToDelete = currentAttachments.filter(
+        currentAtt => !newAttachmentMap.has(currentAtt.fileId)
+      );
+      
+      // Find attachments to add (in new but not in current)
+      const attachmentsToAdd = newAttachments.filter(
+        newAtt => !currentAttachmentMap.has(newAtt.fileId)
+      );
+      
+      logger.info(`Updating attachments for EXP_ID=${expId}: ${attachmentsToDelete.length} to delete, ${attachmentsToAdd.length} to add`);
+      
+      // Soft delete removed attachments
+      for (let attachment of attachmentsToDelete) {
+        await this.deleteAttachment(expId, attachment.fileId, orgId, empId);
+        logger.info(`Soft deleted attachment: FILE_ID=${attachment.fileId}, FILE_NAME=${attachment.fileName}`);
+      }
+      
+      // Add new attachments
+      for (let attachment of attachmentsToAdd) {
+        await this.addAttachment(expId, attachment, orgId, empId);
+        logger.info(`Added new attachment: FILE_ID=${attachment.fileId}, FILE_NAME=${attachment.fileName}`);
+      }
+      
+      // Note: Existing attachments that remain unchanged are left untouched
+      const unchangedCount = currentAttachments.length - attachmentsToDelete.length;
+      if (unchangedCount > 0) {
+        logger.info(`${unchangedCount} attachments remained unchanged`);
+      }
+      
+    } catch (error) {
+      logger.error("Error updating attachments:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Update attachments for expression using existing connection (for transactions)
+   * @param {Connection} connection - Database connection
+   * @param {string} expId - Expression ID
+   * @param {Array} newAttachments - New attachments array from frontend
+   * @param {string} orgId - Organization ID
+   * @param {string} empId - Employee ID
+   */
+  static async updateAttachmentsWithConnection(connection, expId, newAttachments, orgId, empId) {
+    try {
+      // Get current attachments from database
+      const currentAttachments = await this.getAttachments(expId);
+      
+      // Create maps for easier comparison using fileId as key
+      const currentAttachmentMap = new Map(
+        currentAttachments.map(att => [att.fileId, att])
+      );
+      
+      const newAttachmentMap = new Map(
+        newAttachments.map(att => [att.fileId, att])
+      );
+      
+      // Find attachments to soft delete (in current but not in new)
+      const attachmentsToDelete = currentAttachments.filter(
+        currentAtt => !newAttachmentMap.has(currentAtt.fileId)
+      );
+      
+      // Find attachments to add (in new but not in current)
+      const attachmentsToAdd = newAttachments.filter(
+        newAtt => !currentAttachmentMap.has(newAtt.fileId)
+      );
+      
+      logger.info(`Updating attachments for EXP_ID=${expId}: ${attachmentsToDelete.length} to delete, ${attachmentsToAdd.length} to add`);
+      
+      // Soft delete removed attachments
+      for (let attachment of attachmentsToDelete) {
+        await this.deleteAttachmentWithConnection(connection, expId, attachment.fileId, orgId, empId);
+        logger.info(`Soft deleted attachment: FILE_ID=${attachment.fileId}, FILE_NAME=${attachment.fileName}`);
+      }
+      
+      // Add new attachments
+      for (let attachment of attachmentsToAdd) {
+        await this.addAttachmentWithConnection(connection, expId, attachment, orgId, empId);
+        logger.info(`Added new attachment: FILE_ID=${attachment.fileId}, FILE_NAME=${attachment.fileName}`);
+      }
+      
+      // Note: Existing attachments that remain unchanged are left untouched
+      const unchangedCount = currentAttachments.length - attachmentsToDelete.length;
+      if (unchangedCount > 0) {
+        logger.info(`${unchangedCount} attachments remained unchanged`);
+      }
+      
+    } catch (error) {
+      logger.error("Error updating attachments with connection:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Soft delete a specific attachment by fileId
+   * @param {string} expId - Expression ID
+   * @param {string} fileId - File ID to delete
+   * @param {string} orgId - Organization ID
+   * @param {string} empId - Employee ID
+   */
+  static async deleteAttachment(expId, fileId, orgId, empId) {
+    try {
+      const sql = `
+        UPDATE KPDBA.EXPRESSION_ATTACHMENT
+        SET CANCEL_FLAG = 'T',
+            CANCEL_DATE = SYSDATE,
+            CANCEL_OID = :orgId,
+            CANCEL_UID = :empId
+        WHERE EXP_ID = :expId
+          AND FILE_ID = :fileId
+          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
+      `;
+
+      const result = await executeQuery(sql, { expId, fileId, orgId, empId });
+      return result.rowsAffected > 0;
+    } catch (error) {
+      logger.error("Error deleting attachment:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Soft delete a specific attachment by fileId using existing connection
+   * @param {Connection} connection - Database connection
+   * @param {string} expId - Expression ID
+   * @param {string} fileId - File ID to delete
+   * @param {string} orgId - Organization ID
+   * @param {string} empId - Employee ID
+   */
+  static async deleteAttachmentWithConnection(connection, expId, fileId, orgId, empId) {
+    try {
+      const sql = `
+        UPDATE KPDBA.EXPRESSION_ATTACHMENT
+        SET CANCEL_FLAG = 'T',
+            CANCEL_DATE = SYSDATE,
+            CANCEL_OID = :orgId,
+            CANCEL_UID = :empId
+        WHERE EXP_ID = :expId
+          AND FILE_ID = :fileId
+          AND (CANCEL_FLAG IS NULL OR CANCEL_FLAG != 'T')
+      `;
+
+      const result = await executeQueryWithConnection(connection, sql, { expId, fileId, orgId, empId });
+      return result.rowsAffected > 0;
+    } catch (error) {
+      logger.error("Error deleting attachment with connection:", error);
+      throw error;
+    }
+  }
+
+  /**
+   * Delete all attachments for expression (keep for backwards compatibility)
    * @param {string} expId - Expression ID
    */
   static async deleteAttachments(expId) {
