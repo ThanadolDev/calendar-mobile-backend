@@ -99,9 +99,6 @@ async function executeTransaction(transactionFunction, dblocate) {
   try {
     connection = await connectToDatabase(dblocate);
     
-    // Disable autoCommit for transaction
-    await connection.execute('BEGIN', {}, { autoCommit: false });
-    
     // Execute the transaction function with the connection
     const result = await transactionFunction(connection);
     

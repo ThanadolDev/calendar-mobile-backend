@@ -169,7 +169,7 @@ class Expression {
         }
 
         // Handle attachment updates if provided
-        if (expressionData.attachments) {
+        if (expressionData.attachments && Array.isArray(expressionData.attachments)) {
           await this.updateAttachmentsWithConnection(
             connection, 
             expId, 
