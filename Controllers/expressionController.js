@@ -8,11 +8,11 @@ const logger = require('../utils/logger');
  * @route POST /api/expressions
  */
 exports.createExpression = asyncHandler(async (req, res, next) => {
-  const { type, recipient, content, privacy, status, attachments } = req.body;
+  const { type, recipient, subject, content, privacy, status, attachments } = req.body;
   const { ORG_ID, EMP_ID } = req.user;
   
-  if (!recipient || !content) {
-    return next(new ApiError('Recipient and content are required', 400));
+  if (!recipient || !content || !subject) {
+    return next(new ApiError('Recipient, subject, and content are required', 400));
   }
   
   // Map frontend values to DB values
@@ -24,7 +24,7 @@ exports.createExpression = asyncHandler(async (req, res, next) => {
     expType,
     expKind,
     expTo: recipient,
-    expSubject: content.substring(0, 100),
+    expSubject: subject,
     expDetail: content,
     status: expStatus,
     crOid: ORG_ID,
@@ -76,7 +76,7 @@ exports.getExpression = asyncHandler(async (req, res, next) => {
  * @route PUT /api/expressions/:id
  */
 exports.updateExpression = asyncHandler(async (req, res, next) => {
-  const { type, content, privacy, status, attachments } = req.body;
+  const { type, subject, content, privacy, status, attachments } = req.body;
   const { ORG_ID, EMP_ID } = req.user;
   
   const expType = type === 'praise' ? 'G' : 'B';
@@ -86,7 +86,7 @@ exports.updateExpression = asyncHandler(async (req, res, next) => {
   const expression = await Expression.update(req.params.id, {
     expType,
     expKind,
-    expSubject: content.substring(0, 100),
+    expSubject: subject,
     expDetail: content,
     status: expStatus,
     updateOid: ORG_ID,
