@@ -3,6 +3,7 @@ const { Diecut, DiecutSN,DiecutStatus } = require('./diecut');
 const { Tooling, Material } = require('./tooling');
 const { Expression } = require('./expression');
 const { Employee } = require('./employee');
+const Calendar = require('./calendar');
 
 module.exports = {
   User,
@@ -12,5 +13,6 @@ module.exports = {
   Material,
   DiecutStatus,
   Expression,
-  Employee
+  Employee,
+  Calendar
 };

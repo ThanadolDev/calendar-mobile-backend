@@ -4,6 +4,7 @@ const diecutRoutes = require('./diecutRoutes');
 const toolingRoutes = require('./toolingRoutes');
 const expressionsRoutes = require('./expressionRoute');
 const employeeRoutes = require('./employeeRoutes');
+const calendarRoutes = require('./calendarRoutes');
 const router = express.Router();
 
 // Base routes
@@ -12,5 +13,6 @@ router.use('/diecuts', diecutRoutes);
 router.use('/toolings', toolingRoutes);
 router.use('/expressions', expressionsRoutes);
 router.use('/employees', employeeRoutes);
+router.use('/calendar', calendarRoutes);
 
 module.exports = router;
