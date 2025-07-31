@@ -370,8 +370,8 @@ exports.getHolidays = asyncHandler(async (req, res, next) => {
   const start = startDate || `01/01/${year}`;
   const end = endDate || `31/12/${year}`;
 
-  // Execute SQL query for holidays/non-work days (SQL_NO: 1001)
-  const holidays = await executeSqlById(1001, {
+  // Execute SQL query for holidays/non-work days (SQL_NO: 700860001)
+  const holidays = await executeSqlById(700860001, {
     as_yyyy: parseInt(year),
     as_start_date: start,
     as_end_date: end
@@ -416,8 +416,8 @@ exports.getLeaveEvents = asyncHandler(async (req, res, next) => {
   const start = startDate || `01/01/${year}`;
   const end = endDate || `31/12/${year}`;
 
-  // Execute SQL query for leave events (SQL_NO: 1002)
-  const leaves = await executeSqlById(1002, {
+  // Execute SQL query for leave events (SQL_NO: 700860002)
+  const leaves = await executeSqlById(700860002, {
     as_yyyy: year,
     as_start_date: start,
     as_end_date: end,

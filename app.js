@@ -14,7 +14,7 @@ if (process.env.NODE_ENV === 'development') {
   app.use(morgan('dev'));
 }
 
-app.use('/api', routes);
+app.use('/api/calendar', routes);
 
 app.get('/health', (req, res) => {
   res.status(200).json({

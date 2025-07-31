@@ -17,12 +17,13 @@ const {
   getLeaveBalance,
   getMonthCalendarWithHolidays
 } = require('../Controllers/calendarController');
-const { protect } = require('../middleware/auth');
+
+// const auth = require('../middleware/auth');
 
 const router = express.Router();
 
 // Apply authentication middleware to all routes
-router.use(protect);
+// router.use(auth);
 
 // Event CRUD operations
 router.post('/events', createEvent);
@@ -37,7 +38,6 @@ router.delete('/events/:id', deleteEvent);
 // Statistics
 router.get('/stats', getStats);
 
-// Holiday and Leave API endpoints
 router.get('/holidays', getHolidays);
 router.get('/leaves', getLeaveEvents);
 router.get('/unified', getUnifiedCalendar);
