@@ -12,12 +12,12 @@ const {
   getTodayEvents,
   getUpcomingEvents
 } = require('../Controllers/calendarController');
-const auth = require('../middleware/auth');
+const { protect } = require('../middleware/auth');
 
 const router = express.Router();
 
 // Apply authentication middleware to all routes
-router.use(auth);
+router.use(protect);
 
 // Event CRUD operations
 router.post('/events', createEvent);
