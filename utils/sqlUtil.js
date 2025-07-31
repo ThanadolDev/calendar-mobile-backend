@@ -69,7 +69,7 @@ function validateSqlParams(sqlStmt, params) {
 function sanitizeSqlParam(param) {
   if (typeof param === 'string') {
     // Basic SQL injection prevention - remove dangerous characters
-    return param.replace(/[';--]/g, '').trim();
+    return param.replace(/[';-]/g, '').trim();
   }
   if (typeof param === 'number') {
     // Ensure numbers are valid
