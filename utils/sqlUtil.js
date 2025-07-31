@@ -27,34 +27,109 @@ async function getSqlFromTabSoa(sqlNo) {
 }
 
 /**
+ * Validate SQL parameters against SQL statement placeholders
+ * @param {string} sqlStmt - SQL statement with placeholders
+ * @param {Object} params - Parameters object
+ * @returns {Object} - Validated parameters object
+ */
+function validateSqlParams(sqlStmt, params) {
+  // Extract parameter placeholders from SQL statement
+  const sqlParamMatches = sqlStmt.match(/:(\w+)/g) || [];
+  const expectedParams = sqlParamMatches.map(p => p.substring(1));
+  const providedParams = Object.keys(params);
+  
+  // Check for missing required parameters
+  const missing = expectedParams.filter(p => !providedParams.includes(p));
+  const extra = providedParams.filter(p => !expectedParams.includes(p));
+  
+  if (missing.length > 0) {
+    throw new Error(`Missing required SQL parameters: ${missing.join(', ')} for SQL statement: ${sqlStmt.substring(0, 100)}...`);
+  }
+  
+  if (extra.length > 0) {
+    logger.warn(`Extra parameters provided (will be ignored): ${extra.join(', ')}`);
+    // Remove extra parameters to prevent potential issues
+    const validatedParams = {};
+    expectedParams.forEach(param => {
+      if (params[param] !== undefined) {
+        validatedParams[param] = params[param];
+      }
+    });
+    return validatedParams;
+  }
+  
+  return params;
+}
+
+/**
+ * Sanitize SQL parameter to prevent injection
+ * @param {any} param - Parameter value to sanitize
+ * @returns {any} - Sanitized parameter value
+ */
+function sanitizeSqlParam(param) {
+  if (typeof param === 'string') {
+    // Basic SQL injection prevention - remove dangerous characters
+    return param.replace(/[';--]/g, '').trim();
+  }
+  if (typeof param === 'number') {
+    // Ensure numbers are valid
+    if (isNaN(param) || !isFinite(param)) {
+      throw new Error(`Invalid numeric parameter: ${param}`);
+    }
+  }
+  return param;
+}
+
+/**
  * Execute SQL query by SQL number with parameters
  * @param {number} sqlNo - SQL number from SQL_TAB_SOA
- * @param {Array|string} params - Parameters for the query
+ * @param {Object|Array|string} params - Parameters for the query
  * @returns {Promise<Array>} - Query result rows
  */
-async function executeSqlById(sqlNo, params = []) {
+async function executeSqlById(sqlNo, params = {}) {
   try {
     // Get SQL statement
     const sqlStmt = await getSqlFromTabSoa(sqlNo);
     
-    // Process parameters
     let binds = {};
+    
+    // Handle different parameter formats
     if (typeof params === 'string') {
-      // Single parameter
-      binds.param1 = params;
+      // Single parameter - assume it maps to first placeholder
+      const sqlParamMatches = sqlStmt.match(/:(\w+)/g) || [];
+      if (sqlParamMatches.length > 0) {
+        const firstParam = sqlParamMatches[0].substring(1);
+        binds[firstParam] = sanitizeSqlParam(params);
+      } else {
+        binds.param1 = sanitizeSqlParam(params);
+      }
     } else if (Array.isArray(params)) {
-      // Multiple parameters
+      // Array parameters - map to param1, param2, etc.
       params.forEach((param, index) => {
-        binds[`param${index + 1}`] = param;
+        binds[`param${index + 1}`] = sanitizeSqlParam(param);
       });
+    } else if (typeof params === 'object' && params !== null) {
+      // Object parameters - sanitize each value
+      Object.keys(params).forEach(key => {
+        binds[key] = sanitizeSqlParam(params[key]);
+      });
+      
+      // Validate parameters against SQL statement
+      binds = validateSqlParams(sqlStmt, binds);
     }
+    
+    logger.info(`Executing SQL ${sqlNo} with parameters:`, Object.keys(binds));
     
     // Execute query
     const result = await executeQuery(sqlStmt, binds);
     
     return result.rows;
   } catch (error) {
-    logger.error(`Error executing SQL by ID (${sqlNo}):`, error);
+    logger.error(`Error executing SQL by ID (${sqlNo}):`, {
+      error: error.message,
+      sqlNo,
+      paramKeys: typeof params === 'object' ? Object.keys(params) : typeof params
+    });
     throw error;
   }
 }

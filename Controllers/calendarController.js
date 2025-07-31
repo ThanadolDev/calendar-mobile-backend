@@ -366,40 +366,85 @@ exports.getHolidays = asyncHandler(async (req, res, next) => {
     return next(new ApiError('Year parameter is required', 400));
   }
 
+  // Validate year format
+  const yearNum = parseInt(year);
+  if (isNaN(yearNum) || yearNum < 1900 || yearNum > 2100) {
+    return next(new ApiError('Invalid year. Must be between 1900 and 2100', 400));
+  }
+
   // Set default date range if not provided
   const start = startDate || `01/01/${year}`;
   const end = endDate || `31/12/${year}`;
 
-  // Execute SQL query for holidays/non-work days (SQL_NO: 700860001)
-  const holidays = await executeSqlById(700860001, {
-    as_yyyy: parseInt(year),
-    as_start_date: start,
-    as_end_date: end
-  });
+  // Validate date formats if provided
+  const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+  if (startDate && !dateRegex.test(startDate)) {
+    return next(new ApiError('Invalid startDate format. Use DD/MM/YYYY', 400));
+  }
+  if (endDate && !dateRegex.test(endDate)) {
+    return next(new ApiError('Invalid endDate format. Use DD/MM/YYYY', 400));
+  }
 
-  // Transform data for frontend consumption
-  const transformedHolidays = holidays.map(holiday => ({
-    id: `holiday_${holiday.FORMATTED_DATE}`,
-    date: holiday.FORMATTED_DATE,
-    title: holiday.DESCRIPTION,
-    type: 'holiday',
-    category: holiday.CATEGORY.toLowerCase(),
-    isRecurring: holiday.IS_RECURRING === 'Y',
-    dayName: holiday.DAY_NAME.trim(),
-    isAllDay: true,
-    color: getHolidayColor(holiday.CATEGORY)
-  }));
+  try {
+    // Execute SQL query for holidays/non-work days (SQL_NO: 700860001)
+    // Note: Current SQL only uses :as_yyyy parameter, ignoring date range
+    // TODO: Update database SQL to include date range filtering
+    const holidays = await executeSqlById(700860001, {
+      as_yyyy: yearNum
+    });
 
-  res.status(200).json(formatResponse(
-    true,
-    'Holidays retrieved successfully',
-    {
-      holidays: transformedHolidays,
-      year: parseInt(year),
-      dateRange: { start, end },
-      count: transformedHolidays.length
+    // Client-side date filtering since SQL doesn't support it yet
+    let filteredHolidays = holidays;
+    if (startDate || endDate) {
+      const startDateObj = startDate ? new Date(startDate.split('/').reverse().join('-')) : new Date('1900-01-01');
+      const endDateObj = endDate ? new Date(endDate.split('/').reverse().join('-')) : new Date('2100-12-31');
+      
+      filteredHolidays = holidays.filter(holiday => {
+        if (!holiday.NON_WORK_DATE) return false;
+        
+        // Parse NON_WORK_DATE (format: dd/mm/yyyy hh24:mi)
+        const datePart = holiday.NON_WORK_DATE.split(' ')[0];
+        const holidayDate = new Date(datePart.split('/').reverse().join('-'));
+        
+        return holidayDate >= startDateObj && holidayDate <= endDateObj;
+      });
     }
-  ));
+
+    // Transform data for frontend consumption
+    const transformedHolidays = filteredHolidays.map(holiday => {
+      // Parse date from NON_WORK_DATE (format: dd/mm/yyyy hh24:mi)
+      const datePart = holiday.NON_WORK_DATE ? holiday.NON_WORK_DATE.split(' ')[0] : '';
+      
+      return {
+        id: `holiday_${datePart.replace(/\//g, '')}`,
+        date: datePart,
+        title: holiday.NON_WORK_DESC || 'Holiday',
+        type: 'holiday',
+        category: 'holiday',
+        isRecurring: false,
+        dayName: datePart ? new Date(datePart.split('/').reverse().join('-')).toLocaleDateString('en', { weekday: 'long' }) : '',
+        isAllDay: true,
+        color: getHolidayColor('HOLIDAY')
+      };
+    });
+
+    logger.info(`Retrieved ${transformedHolidays.length} holidays for year ${yearNum}`);
+
+    res.status(200).json(formatResponse(
+      true,
+      'Holidays retrieved successfully',
+      {
+        holidays: transformedHolidays,
+        year: yearNum,
+        dateRange: { start, end },
+        count: transformedHolidays.length,
+        note: 'Date range filtering applied client-side. Consider updating SQL for better performance.'
+      }
+    ));
+  } catch (error) {
+    logger.error('Error retrieving holidays:', error);
+    return next(new ApiError('Failed to retrieve holidays', 500));
+  }
 });
 
 /**
@@ -413,47 +458,99 @@ exports.getLeaveEvents = asyncHandler(async (req, res, next) => {
     return next(new ApiError('Year parameter is required', 400));
   }
 
+  // Validate year format
+  const yearNum = parseInt(year);
+  if (isNaN(yearNum) || yearNum < 1900 || yearNum > 2100) {
+    return next(new ApiError('Invalid year. Must be between 1900 and 2100', 400));
+  }
+
   const start = startDate || `01/01/${year}`;
   const end = endDate || `31/12/${year}`;
 
-  // Execute SQL query for leave events (SQL_NO: 700860002)
-  const leaves = await executeSqlById(700860002, {
-    as_yyyy: year,
-    as_start_date: start,
-    as_end_date: end,
-    as_emp_id: employeeId ? `%${employeeId}%` : '%'
-  });
+  // Validate date formats if provided
+  const dateRegex = /^\d{2}\/\d{2}\/\d{4}$/;
+  if (startDate && !dateRegex.test(startDate)) {
+    return next(new ApiError('Invalid startDate format. Use DD/MM/YYYY', 400));
+  }
+  if (endDate && !dateRegex.test(endDate)) {
+    return next(new ApiError('Invalid endDate format. Use DD/MM/YYYY', 400));
+  }
 
-  const transformedLeaves = leaves.map(leave => ({
-    id: `leave_${leave.LEAVE_ID}_${leave.LEAVE_DATE}`,
-    leaveId: leave.LEAVE_ID,
-    employeeId: leave.EMP_ID,
-    employeeName: leave.EMPLOYEE_NAME,
-    date: leave.LEAVE_DATE,
-    startDate: leave.START_DATE,
-    endDate: leave.END_DATE,
-    startTime: leave.START_TIME,
-    endTime: leave.END_TIME,
-    duration: leave.DURATION,
-    leaveType: leave.LEAVE_TYPE,
-    medicalStatus: leave.MEDICAL_STATUS,
-    approvalStatus: leave.APPROVAL_STATUS.toLowerCase(),
-    color: leave.DISPLAY_COLOR,
-    isAllDay: leave.DURATION === 1,
-    type: 'leave'
-  }));
+  try {
+    // The current SQL only uses :as_yyyy and :as_ddmmyyyy parameters
+    // We need to provide the end date in the format the SQL expects
+    const leaves = await executeSqlById(700860002, {
+      as_yyyy: year.toString(),
+      as_ddmmyyyy: end // Use end date as the filter date
+    });
 
-  res.status(200).json(formatResponse(
-    true,
-    'Leave events retrieved successfully',
-    {
-      leaves: transformedLeaves,
-      year: parseInt(year),
-      dateRange: { start, end },
-      count: transformedLeaves.length,
-      employeeFilter: employeeId || 'all'
+    // Client-side filtering for employee and date range since SQL doesn't support them
+    let filteredLeaves = leaves;
+
+    // Filter by employee ID if provided
+    if (employeeId) {
+      filteredLeaves = filteredLeaves.filter(leave => 
+        leave.EMP_ID && leave.EMP_ID.toString().includes(employeeId.toString())
+      );
     }
-  ));
+
+    // Filter by date range if provided
+    if (startDate) {
+      const startDateObj = new Date(startDate.split('/').reverse().join('-'));
+      filteredLeaves = filteredLeaves.filter(leave => {
+        if (!leave.START_DATE) return false;
+        const leaveStartDate = new Date(leave.START_DATE);
+        return leaveStartDate >= startDateObj;
+      });
+    }
+
+    if (endDate) {
+      const endDateObj = new Date(endDate.split('/').reverse().join('-'));
+      filteredLeaves = filteredLeaves.filter(leave => {
+        if (!leave.START_DATE) return false;
+        const leaveStartDate = new Date(leave.START_DATE);
+        return leaveStartDate <= endDateObj;
+      });
+    }
+
+    const transformedLeaves = filteredLeaves.map(leave => ({
+      id: `leave_${leave.EMP_ID}_${leave.START_DATE}`,
+      leaveId: leave.EMP_ID, // Using EMP_ID as leave identifier
+      employeeId: leave.EMP_ID,
+      employeeName: leave.FULL_NAME,
+      unitId: leave.UNIT_ID,
+      unitDesc: leave.UNIT_DESC,
+      startDate: leave.START_DATE,
+      usedHolidays: leave.USED_HLN || 0,
+      usedSick: leave.USED_SLN || 0,
+      usedSickNoMed: leave.USED_SLN_NO_MED || 0,
+      usedBusiness: leave.USED_BLP || 0,
+      usedOtherLeave: leave.USED_BLN || 0,
+      totalHolidayEntitlement: leave.SUM_HLN || 0,
+      totalBusinessEntitlement: leave.SUM_BLS || 0,
+      type: 'leave',
+      isAllDay: true,
+      color: '#2196F3' // Blue color for leave events
+    }));
+
+    logger.info(`Retrieved ${transformedLeaves.length} leave records for year ${yearNum}`);
+
+    res.status(200).json(formatResponse(
+      true,
+      'Leave events retrieved successfully',
+      {
+        leaves: transformedLeaves,
+        year: yearNum,
+        dateRange: { start, end },
+        count: transformedLeaves.length,
+        employeeFilter: employeeId || 'all',
+        note: 'Employee and date range filtering applied client-side. Consider updating SQL for better performance.'
+      }
+    ));
+  } catch (error) {
+    logger.error('Error retrieving leave events:', error);
+    return next(new ApiError('Failed to retrieve leave events', 500));
+  }
 });
 
 /**
