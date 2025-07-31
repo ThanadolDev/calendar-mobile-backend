@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const { errorHandler } = require('./middleware/error');
-const routes = require('./routes');
+const routes = require('./routes/calendarRoutes.js');
 
 const app = express();
 
