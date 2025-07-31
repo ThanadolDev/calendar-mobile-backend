@@ -10,7 +10,12 @@ const {
   deleteEvent,
   getStats,
   getTodayEvents,
-  getUpcomingEvents
+  getUpcomingEvents,
+  getHolidays,
+  getLeaveEvents,
+  getUnifiedCalendar,
+  getLeaveBalance,
+  getMonthCalendarWithHolidays
 } = require('../Controllers/calendarController');
 const { protect } = require('../middleware/auth');
 
@@ -31,5 +36,12 @@ router.delete('/events/:id', deleteEvent);
 
 // Statistics
 router.get('/stats', getStats);
+
+// Holiday and Leave API endpoints
+router.get('/holidays', getHolidays);
+router.get('/leaves', getLeaveEvents);
+router.get('/unified', getUnifiedCalendar);
+router.get('/leave-balance/:employeeId', getLeaveBalance);
+router.get('/month/:year/:month', getMonthCalendarWithHolidays);
 
 module.exports = router;
